@@ -170,17 +170,28 @@ didn't succeed."
 		       'org-tempo-tags)
 
 
-;;; Setup of Org Tempo
-;;
-;; Org Tempo is set up with each new Org buffer and potentially in the
-;; current Org buffer.
+;;; Org Tempo minor mode
 
-(add-hook 'org-mode-hook 'org-tempo-setup)
-(add-hook 'org-tab-before-tab-emulation-hook 'org-tempo-complete-tag)
+;;;###autoload
+(define-minor-mode org-tempo-mode
+  "Expand \"<X\" style templates in org-mode buffers.
 
-;; Enable Org Tempo in all open Org buffers.
-(dolist (b (org-buffer-list 'files))
-  (with-current-buffer b (org-tempo-setup)))
+See `org-tempo-keywords-alist' for more information on how
+templates are defined."
+  :lighter " tempo"
+  (if org-tempo-mode
+      (progn
+	(org-tempo-setup)
+	(add-hook 'org-tab-before-tab-emulation-hook #'org-tempo-complete-tag nil 'local))
+    (remove-hook 'org-tab-before-tab-emulation-hook #'org-tempo-complete-tag 'local)))
+
+(defun org-tempo-mode--activate-in-buffer ()
+  (when (derived-mode-p 'org-mode)
+    (org-tempo-mode 1)))
+
+;;;###autoload
+(define-global-minor-mode org-tempo-global-mode org-tempo-mode
+  org-tempo-mode--activate-in-buffer)
 
 (provide 'org-tempo)
 
