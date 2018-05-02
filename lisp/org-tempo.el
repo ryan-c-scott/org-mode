@@ -40,7 +40,6 @@
 
 (require 'tempo)
 (require 'cl-lib)
-(require 'org)
 
 (defvar org-structure-template-alist)
 
@@ -192,6 +191,45 @@ templates are defined."
 ;;;###autoload
 (define-global-minor-mode org-tempo-global-mode org-tempo-mode
   org-tempo-mode--activate-in-buffer)
+
+
+;;; Compatibility code
+
+;;; The code in this section can be removed in the next major release
+;;; after org-tempo was released (currently projected to land in Org
+;;; 9.2, therefore removal after Org 10).  At that time, the code
+;;; activating org-tempo-global-mode should also be removed from
+;;; org.el, and (require 'org) should be added to the top of this
+;;; file.
+
+(defvar org-tempo--user-activated nil
+  "This will be set to t when we detect that the user has
+activated org-tempo in their .emacs.")
+
+(advice-add 'org-tempo-global-mode :after
+	    (lambda (&rest _)
+	      (setq org-tempo--user-activated t)))
+
+;;; TODO: should we also try to detect the case when the user adds
+;;; org-tempo-mode to org-mode-hook?
+
+(advice-add 'org-tempo-complete-tag :after
+	    (lambda (&rest _)
+	      (unless org-tempo--user-activated
+		(org-display-warning
+		 (substitute-command-keys "It looks like you have \
+expanded a <X style structure template.
+
+That feature will be removed from Org in the next major release.
+If you would like to continue using it, you should
+add `(org-tempo-global-mode 1)' to your emacs initialization
+file (which will also disable this warning message).
+\\<org-mode-map>
+Alternatively, you may wish to use the new template expansion
+facility `org-insert-structure-template', which is bound to
+\\[org-insert-structure-template] in org-mode buffers.")))))
+
+
 
 (provide 'org-tempo)
 

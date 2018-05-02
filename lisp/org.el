@@ -23582,6 +23582,12 @@ when non-nil, is a regexp matching keywords names."
 	  (lambda () (add-hook 'change-major-mode-hook
 			       'org-show-all 'append 'local)))
 
+;; For compatibility; remove in Org 10
+(require 'org-tempo)
+(defvar org-tempo--user-activated)
+(let (org-tempo--user-activated)
+  (org-tempo-global-mode 1))
+
 (provide 'org)
 
 (run-hooks 'org-load-hook)
