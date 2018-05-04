@@ -213,11 +213,12 @@ activated org-tempo in their .emacs.")
 ;;; TODO: should we also try to detect the case when the user adds
 ;;; org-tempo-mode to org-mode-hook?
 
-(advice-add 'org-tempo-complete-tag :after
-	    (lambda (&rest _)
-	      (unless org-tempo--user-activated
-		(org-display-warning
-		 (substitute-command-keys "It looks like you have \
+(advice-add 'org-tempo-complete-tag :filter-return
+	    (lambda (result)
+	      (when result
+		(unless org-tempo--user-activated
+		  (org-display-warning
+		   (substitute-command-keys "It looks like you have \
 expanded a <X style structure template.
 
 That feature will be removed from Org in the next major release.
@@ -227,7 +228,7 @@ file (which will also disable this warning message).
 \\<org-mode-map>
 Alternatively, you may wish to use the new template expansion
 facility `org-insert-structure-template', which is bound to
-\\[org-insert-structure-template] in org-mode buffers.")))))
+\\[org-insert-structure-template] in org-mode buffers."))))))
 
 
 
