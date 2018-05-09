@@ -40,6 +40,7 @@
 
 (require 'tempo)
 (require 'cl-lib)
+(require 'org-macs)
 
 (defvar org-structure-template-alist)
 
