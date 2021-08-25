@@ -2188,6 +2188,10 @@ silent -- no results are inserted into the Org buffer but
 file ---- the results are interpreted as a file path, and are
           inserted into the buffer using the Org file syntax.
 
+attach -- used with `file', will move the file at the path returned
+          by the source block to the nodes attachmen directory (as
+          reported by `org-attach-dir'.
+
 list ---- the results are interpreted as an Org list.
 
 raw ----- results are added directly to the Org file.  This is
@@ -2241,9 +2245,13 @@ INFO may provide the values of these header arguments (in the
   (cond ((stringp result)
 	 (setq result (org-no-properties result))
 	 (when (member "file" result-params)
-	   (setq result (org-babel-result-to-file
-			 result
-			 (org-babel--file-desc (nth 2 info) result)))))
+	   (setq result (if (member "attach" result-params)
+                            (org-babel-result-to-file-attachment
+                             result
+                             (org-babel--file-desc (nth 2 info) result))
+                          (org-babel-result-to-file
+			   result
+			   (org-babel--file-desc (nth 2 info) result))))))
 	((listp result))
 	(t (setq result (format "%S" result))))
   (if (and result-params (member "silent" result-params))
@@ -2548,7 +2556,7 @@ in the buffer."
 		 (line-beginning-position 2))
 	     (point))))))
 
-(defun org-babel-result-to-file (result &optional description)
+(defun org-babel-result-to-file (result &optional description type)
   "Convert RESULT into an Org link with optional DESCRIPTION.
 If the `default-directory' is different from the containing
 file's directory then expand relative links."
@@ -2559,7 +2567,8 @@ file's directory then expand relative links."
 			    (expand-file-name
 			     (file-name-directory
 			      (buffer-file-name (buffer-base-buffer)))))))))
-      (format "[[file:%s]%s]"
+      (format "[[%s:%s]%s]"
+              (or type "file")
 	      (if (and default-directory
 		       (buffer-file-name (buffer-base-buffer)) same-directory?)
 		  (if (eq org-link-file-path-type 'adaptive)
@@ -2570,6 +2579,18 @@ file's directory then expand relative links."
 		    (expand-file-name result default-directory))
 		result)
 	      (if description (concat "[" description "]") "")))))
+
+(defun org-babel-result-to-file-attachment (result &optional description)
+  "Convert RESULT into an Org link after moving the provided path to the current node's attachment directory as reported by `org-attach-dir', using the optional DESCRIPTION if provided.
+See `org-babel-result-to-file' for further link generation details."
+
+  (let* ((dir (file-relative-name
+               (org-attach-dir t)))
+         (filename (file-name-nondirectory result))
+         (newname (format "%s/%s" dir filename)))
+
+    (rename-file result newname t)
+    (org-babel-result-to-file filename description "attachment")))
 
 (defun org-babel-examplify-region (beg end &optional results-switches inline)
   "Comment out region using the inline `==' or `: ' org example quote."
