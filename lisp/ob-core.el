@@ -702,9 +702,10 @@ block."
 		 (body (org-babel--expand-body info))
 		 (dir (cdr (assq :dir params)))
 		 (mkdirp (cdr (assq :mkdirp params)))
+                 (attach (cdr (assq :attach params)))
 		 (default-directory
 		   (cond
-                    ((or (eq dir 'attach) (string= dir "'attach"))
+                    (attach
                      (file-name-as-directory
                       (org-attach-dir t)))
 		    ((not dir) default-directory)
@@ -927,10 +928,10 @@ session."
 			 (nth 1 info)))))
          (session (cdr (assq :session params)))
 	 (dir (cdr (assq :dir params)))
+         (attach (cdr (assq :attach params)))
 	 (default-directory
-	   (or (and dir (if (or (eq dir 'attach) (string= dir "'attach"))
-                            (org-attach-dir t)
-                          (file-name-as-directory dir)))
+	   (or (and attach (org-attach-dir t))
+               (and dir (file-name-as-directory dir))
                default-directory))
 	 (cmd (intern (concat "org-babel-load-session:" lang))))
     (unless (fboundp cmd)
@@ -952,9 +953,8 @@ the session.  Copy the body of the code block to the kill ring."
          (session (cdr (assq :session params)))
 	 (dir (cdr (assq :dir params)))
 	 (default-directory
-	   (or (and dir (if (or (eq dir 'attach) (string= dir "'attach"))
-                            (org-attach-dir t)
-                          (file-name-as-directory dir)))
+	   (or (and attach (org-attach-dir t))
+               (and dir (file-name-as-directory dir))
                default-directory))
 	 (init-cmd (intern (format "org-babel-%s-initiate-session" lang)))
 	 (prep-cmd (intern (concat "org-babel-prep-session:" lang))))
@@ -2246,16 +2246,20 @@ INFO may provide the values of these header arguments (in the
 
 :wrap --- the effect is similar to `latex' in RESULT-PARAMS but
           using the argument supplied to specify the export block
-          or snippet type."
+          or snippet type.
+
+:attach - like `:dir (org-attach-dir t)'. If used with `:file' paths
+          under `org-attach-dir' are converted to `attachment:'
+          style links."
   (cond ((stringp result)
 	 (setq result (org-no-properties result))
 	 (when (member "file" result-params)
 	   (setq result (let* ((params (nth 2 info))
-                               (dir (cdr (assq :dir params))))
+                               (attach (assq :attach params)))
                           (org-babel-result-to-file
 			   result
 			   (org-babel--file-desc params result)
-                           (when (or (eq dir 'attach) (string= dir "'attach"))
+                           (when attach
                              'attachment))))))
 	((listp result))
 	(t (setq result (format "%S" result))))
