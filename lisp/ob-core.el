@@ -952,6 +952,7 @@ the session.  Copy the body of the code block to the kill ring."
          (params (nth 2 info))
          (session (cdr (assq :session params)))
 	 (dir (cdr (assq :dir params)))
+	 (attach (cdr (assq :attach params)))
 	 (default-directory
 	   (or (and attach (org-attach-dir t))
                (and dir (file-name-as-directory dir))
