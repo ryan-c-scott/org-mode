@@ -925,8 +925,7 @@ session."
          (session (cdr (assq :session params)))
 	 (dir (cdr (assq :dir params)))
 	 (default-directory
-	   (or (and dir (file-name-as-directory dir))
-               default-directory))
+	   (or (and dir (file-name-as-directory dir)) default-directory))
 	 (cmd (intern (concat "org-babel-load-session:" lang))))
     (unless (fboundp cmd)
       (error "No org-babel-load-session function for %s!" lang))
@@ -947,8 +946,7 @@ the session.  Copy the body of the code block to the kill ring."
          (session (cdr (assq :session params)))
 	 (dir (cdr (assq :dir params)))
 	 (default-directory
-	   (or (and dir (file-name-as-directory dir))
-               default-directory))
+	   (or (and dir (file-name-as-directory dir)) default-directory))
 	 (init-cmd (intern (format "org-babel-%s-initiate-session" lang)))
 	 (prep-cmd (intern (concat "org-babel-prep-session:" lang))))
     (when (and (stringp session) (string= session "none"))
