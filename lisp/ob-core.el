@@ -704,9 +704,6 @@ block."
 		 (mkdirp (cdr (assq :mkdirp params)))
 		 (default-directory
 		   (cond
-                    ((or (eq dir 'attach) (string= dir "'attach"))
-                     (file-name-as-directory
-                      (org-attach-dir t)))
 		    ((not dir) default-directory)
 		    ((member mkdirp '("no" "nil" nil))
 		     (file-name-as-directory (expand-file-name dir)))
@@ -928,9 +925,7 @@ session."
          (session (cdr (assq :session params)))
 	 (dir (cdr (assq :dir params)))
 	 (default-directory
-	   (or (and dir (if (or (eq dir 'attach) (string= dir "'attach"))
-                            (org-attach-dir t)
-                          (file-name-as-directory dir)))
+	   (or (and dir (file-name-as-directory dir))
                default-directory))
 	 (cmd (intern (concat "org-babel-load-session:" lang))))
     (unless (fboundp cmd)
@@ -952,9 +947,7 @@ the session.  Copy the body of the code block to the kill ring."
          (session (cdr (assq :session params)))
 	 (dir (cdr (assq :dir params)))
 	 (default-directory
-	   (or (and dir (if (or (eq dir 'attach) (string= dir "'attach"))
-                            (org-attach-dir t)
-                          (file-name-as-directory dir)))
+	   (or (and dir (file-name-as-directory dir))
                default-directory))
 	 (init-cmd (intern (format "org-babel-%s-initiate-session" lang)))
 	 (prep-cmd (intern (concat "org-babel-prep-session:" lang))))
@@ -2250,15 +2243,14 @@ INFO may provide the values of these header arguments (in the
   (cond ((stringp result)
 	 (setq result (org-no-properties result))
 	 (when (member "file" result-params)
-	   (setq result (let* ((params (nth 2 info))
-                               (dir (cdr (assq :dir params))))
-                          (org-babel-result-to-file
-			   result
-			   (org-babel--file-desc params result)
-                           (when (or (eq dir 'attach) (string= dir "'attach"))
-                             'attachment))))))
+	   (setq result
+                 (org-babel-result-to-file
+		  result
+		  (org-babel--file-desc (nth 2 info) result)
+                  'attachment))))
 	((listp result))
 	(t (setq result (format "%S" result))))
+
   (if (and result-params (member "silent" result-params))
       (progn (message (replace-regexp-in-string "%" "%%" (format "%S" result)))
 	     result)
@@ -2569,21 +2561,24 @@ If the optional TYPE is passed as 'attachment` and the path is a descendant of t
   (when (stringp result)
     (let* ((result-file-name (expand-file-name result))
            (base-file-name (buffer-file-name (buffer-base-buffer)))
+           (base-directory (file-name-directory base-file-name))
            (same-directory?
 	    (and base-file-name
 	         (not (string= (expand-file-name default-directory)
 			       (expand-file-name
-			        (file-name-directory
-			         base-file-name))))))
+			        base-directory)))))
            (request-attachment (eq type 'attachment))
-           (attach-dir-len (when request-attachment (length default-directory)))
+           (attach-dir (when request-attachment
+                         (let ((default-directory base-directory))
+                           (org-attach-dir t))))
+           (attach-dir-len (when request-attachment (length attach-dir)))
            (in-attach-dir (when (and request-attachment (> (length result-file-name) attach-dir-len))
                             (string=
                              (substring result-file-name 0 attach-dir-len)
-                             default-directory))))
+                             attach-dir))))
       (format "[[%s:%s]%s]"
               (pcase type
-                ('attachment "attachment")
+                ((and 'attachment (guard in-attach-dir)) "attachment")
                 (_ "file"))
               (if (and request-attachment in-attach-dir)
                   (file-relative-name result-file-name)
@@ -2725,6 +2720,11 @@ parameters when merging lists."
 				  exports-exclusive-groups
 				  exports
 				  (split-string (or value "")))))
+          ((or '(:dir . 'attach) '(:dir . "'attach"))
+           (setq params (append
+                         `((:dir . ,(org-attach-dir nil t))
+                           (:mkdirp . t))
+                         (assq-delete-all :dir (assq-delete-all :mkdir params)))))
 	  ;; Regular keywords: any value overwrites the previous one.
 	  (_ (setq params (cons pair (assq-delete-all (car pair) params)))))))
     ;; Handle `:var' and clear out colnames and rownames for replaced
