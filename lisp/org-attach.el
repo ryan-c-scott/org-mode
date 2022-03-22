@@ -1,6 +1,6 @@
 ;;; org-attach.el --- Manage file attachments to Org outlines -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2022 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@newartisans.com>
 ;; Keywords: org data attachment
@@ -40,6 +40,7 @@
 (require 'org-id)
 
 (declare-function dired-dwim-target-directory "dired-aux")
+(declare-function dired-get-marked-files "dired" (&optional localp arg filter distinguish-one-marked error))
 (declare-function org-element-property "org-element" (property element))
 (declare-function org-element-type "org-element" (element))
 (declare-function org-inlinetask-goto-beginning "org-inlinetask" ())
@@ -120,10 +121,10 @@ lns   create a symbol link.  Note that this is not supported
 (defcustom org-attach-use-inheritance 'selective
   "Attachment inheritance for the outline.
 
-Enabling inheritance for org-attach implies two things.  First,
+Enabling inheritance for `org-attach' implies two things.  First,
 that attachment links will look through all parent headings until
-it finds the linked attachment.  Second, that running org-attach
-inside a node without attachments will make org-attach operate on
+it finds the linked attachment.  Second, that running `org-attach'
+inside a node without attachments will make `org-attach' operate on
 the first parent heading it finds with an attachment.
 
 Selective means to respect the inheritance setting in
@@ -283,44 +284,44 @@ Shows a list of commands and prompts for another key to execute a command."
 	    (org-switch-to-buffer-other-window "*Org Attach*")
 	    (erase-buffer)
 	    (setq cursor-type nil
-	      header-line-format "Use C-v, M-v, C-n or C-p to navigate.")
+	          header-line-format "Use C-v, M-v, C-n or C-p to navigate.")
 	    (insert
-               (concat "Attachment folder:\n"
-		       (or dir
-			   "Can't find an existing attachment-folder")
-		       (unless (and dir (file-directory-p dir))
-			 "\n(Not yet created)")
-		       "\n\n"
-	               (format "Select an Attachment Command:\n\n%s"
-		               (mapconcat
-		                (lambda (entry)
-		                  (pcase entry
-		                    (`((,key . ,_) ,_ ,docstring)
-		                     (format "%c       %s"
-			                     key
-			                     (replace-regexp-in-string "\n\\([\t ]*\\)"
-							               "        "
-							               docstring
-							               nil nil 1)))
-		                    (_
-		                     (user-error
-			              "Invalid `org-attach-commands' item: %S"
-			              entry))))
-		                org-attach-commands
-		                "\n")))))
+             (concat "Attachment folder:\n"
+		     (or dir
+			 "Can't find an existing attachment-folder")
+		     (unless (and dir (file-directory-p dir))
+		       "\n(Not yet created)")
+		     "\n\n"
+	             (format "Select an Attachment Command:\n\n%s"
+		             (mapconcat
+		              (lambda (entry)
+		                (pcase entry
+		                  (`((,key . ,_) ,_ ,docstring)
+		                   (format "%c       %s"
+			                   key
+			                   (replace-regexp-in-string "\n\\([\t ]*\\)"
+							             "        "
+							             docstring
+							             nil nil 1)))
+		                  (_
+		                   (user-error
+			            "Invalid `org-attach-commands' item: %S"
+			            entry))))
+		              org-attach-commands
+		              "\n")))))
 	  (org-fit-window-to-buffer (get-buffer-window "*Org Attach*"))
 	  (let ((msg (format "Select command: [%s]"
 			     (concat (mapcar #'caar org-attach-commands)))))
 	    (message msg)
 	    (while (and (setq c (read-char-exclusive))
-		        (memq c '(14 16 22 134217846)))
+                        (memq c '(?\C-n ?\C-p ?\C-v ?\M-v)))
 	      (org-scroll c t)))
 	  (and (get-buffer "*Org Attach*") (kill-buffer "*Org Attach*"))))
       (let ((command (cl-some (lambda (entry)
 				(and (memq c (nth 0 entry)) (nth 1 entry)))
 			      org-attach-commands)))
-	(if (commandp command t)
-	    (call-interactively command)
+	(if (commandp command)
+	    (command-execute command)
 	  (error "No such attachment command: %c" c))))))
 
 ;;;###autoload
@@ -335,7 +336,7 @@ will be invoked to access the directory for the current entry.
 Note that this method returns the directory as declared by ID or
 DIR even if the directory doesn't exist in the filesystem.
 
-If CREATE-IF-NOT-EXIST-P is non-nil, `org-attach-dir-get-create'
+If CREATE-IF-NOT-EXISTS-P is non-nil, `org-attach-dir-get-create'
 is run.  If NO-FS-CHECK is non-nil, the function returns the path
 to the attachment even if it has not yet been initialized in the
 filesystem.
@@ -378,7 +379,7 @@ If the attachment by some reason cannot be created an error will be raised."
 	 ((or (eq org-attach-preferred-new-method 'dir) (eq answer ?2))
 	  (setq attach-dir (org-attach-set-directory)))
 	 ((eq org-attach-preferred-new-method 'nil)
-	  (error "No existing directory. DIR or ID property has to be explicitly created")))))
+	  (error "No existing directory.  DIR or ID property has to be explicitly created")))))
     (unless attach-dir
       (error "No attachment directory is associated with the current node"))
     (unless (file-directory-p attach-dir)
@@ -386,7 +387,7 @@ If the attachment by some reason cannot be created an error will be raised."
     attach-dir))
 
 (defun org-attach-dir-from-id (id  &optional try-all)
-  "Returns a folder path based on `org-attach-id-dir' and ID.
+  "Return a folder path based on `org-attach-id-dir' and ID.
 If TRY-ALL is non-nil, try all id-to-path functions in
 `org-attach-id-to-path-function-list' and return the first path
 that exist in the filesystem, or the first one if none exist.
@@ -447,7 +448,7 @@ Return the directory."
     new))
 
 (defun org-attach-unset-directory ()
-  "Removes DIR node property.
+  "Remove DIR node property.
 If attachment folder is changed due to removal of DIR-property
 ask to move attachments to new location and ask to delete old
 attachment-folder.
@@ -483,6 +484,7 @@ DIR-property exists (that is different from the unset one)."
   (org-attach-tag 'off))
 
 (defun org-attach-url (url)
+  "Attach URL."
   (interactive "MURL of the file to attach: \n")
   (let ((org-attach-method 'url))
     (org-attach-attach url)))
@@ -503,7 +505,7 @@ if it would overwrite an existing filename."
 
 (defun org-attach-attach (file &optional visit-dir method)
   "Move/copy/link FILE into the attachment directory of the current outline node.
-If VISIT-DIR is non-nil, visit the directory with dired.
+If VISIT-DIR is non-nil, visit the directory with `dired'.
 METHOD may be `cp', `mv', `ln', `lns' or `url' default taken from
 `org-attach-method'."
   (interactive
@@ -574,27 +576,27 @@ The attachment is created as an Emacs buffer."
     (find-file (expand-file-name file attach-dir))
     (message "New attachment %s" file)))
 
-(defun org-attach-delete-one (&optional file)
-  "Delete a single attachment."
+(defun org-attach-delete-one (&optional attachment)
+  "Delete a single ATTACHMENT."
   (interactive)
   (let* ((attach-dir (org-attach-dir))
 	 (files (org-attach-file-list attach-dir))
-	 (file (or file
+	 (attachment (or attachment
 		   (completing-read
 		    "Delete attachment: "
 		    (mapcar (lambda (f)
 			      (list (file-name-nondirectory f)))
 			    files)))))
-    (setq file (expand-file-name file attach-dir))
-    (unless (file-exists-p file)
-      (error "No such attachment: %s" file))
-    (delete-file file)
+    (setq attachment (expand-file-name attachment attach-dir))
+    (unless (file-exists-p attachment)
+      (error "No such attachment: %s" attachment))
+    (delete-file attachment)
     (run-hook-with-args 'org-attach-after-change-hook attach-dir)))
 
 (defun org-attach-delete-all (&optional force)
   "Delete all attachments from the current outline node.
 This actually deletes the entire attachment directory.
-A safer way is to open the directory in dired and delete from there.
+A safer way is to open the directory in `dired' and delete from there.
 
 With prefix argument FORCE, directory will be recursively deleted
 with no prompts."
@@ -629,12 +631,12 @@ empty attachment directories."
                      t))
           (delete-directory attach-dir))))))
 
-(defun org-attach-file-list (dir)
-  "Return a list of files in the attachment directory.
+(defun org-attach-file-list (directory)
+  "Return a list of files in the attachment DIRECTORY.
 This ignores files ending in \"~\"."
   (delq nil
 	(mapcar (lambda (x) (if (string-match "^\\.\\.?\\'" x) nil x))
-		(directory-files dir nil "[^~]\\'"))))
+		(directory-files directory nil "[^~]\\'"))))
 
 (defun org-attach-reveal ()
   "Show the attachment directory of the current outline node.
@@ -645,7 +647,7 @@ exist yet.  Respects `org-attach-preferred-new-method'."
   (org-open-file (org-attach-dir-get-create)))
 
 (defun org-attach-reveal-in-emacs ()
-  "Show the attachment directory of the current outline node in dired.
+  "Show the attachment directory of the current outline node in `dired'.
 Will create an attachment and folder if it doesn't exist yet.
 Respects `org-attach-preferred-new-method'."
   (interactive)
@@ -749,14 +751,14 @@ This function is called by `org-archive-hook'.  The option
 
 ;;;###autoload
 (defun org-attach-dired-to-subtree (files)
-  "Attach FILES marked or current file in dired to subtree in other window.
+  "Attach FILES marked or current file in `dired' to subtree in other window.
 Takes the method given in `org-attach-method' for the attach action.
-Precondition: Point must be in a dired buffer.
+Precondition: Point must be in a `dired' buffer.
 Idea taken from `gnus-dired-attach'."
   (interactive
    (list (dired-get-marked-files)))
   (unless (eq major-mode 'dired-mode)
-    (user-error "This command must be triggered in a dired buffer"))
+    (user-error "This command must be triggered in a `dired' buffer"))
   (let ((start-win (selected-window))
         (other-win
          (get-window-with-predicate

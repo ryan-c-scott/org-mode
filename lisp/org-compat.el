@@ -1,6 +1,6 @@
 ;;; org-compat.el --- Compatibility Code for Older Emacsen -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -30,6 +30,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'seq)
 (require 'org-macs)
 
 (declare-function org-agenda-diary-entry "org-agenda")
@@ -40,7 +41,8 @@
 (declare-function org-align-tags "org" (&optional all))
 (declare-function org-at-heading-p "org" (&optional ignored))
 (declare-function org-at-table.el-p "org" ())
-(declare-function org-element-at-point "org-element" ())
+(declare-function org-element-at-point "org-element" (&optional pom cached-only))
+(declare-function org-element-at-point-no-context "org-element" (&optional pom))
 (declare-function org-element-context "org-element" (&optional element))
 (declare-function org-element-lineage "org-element" (blob &optional types with-self))
 (declare-function org-element-type "org-element" (element))
@@ -74,6 +76,27 @@
 
 ;;; Emacs < 28.1 compatibility
 
+(if (fboundp 'file-name-concat)
+    (defalias 'org-file-name-concat #'file-name-concat)
+  (defun org-file-name-concat (directory &rest components)
+    "Append COMPONENTS to DIRECTORY and return the resulting string.
+
+Elements in COMPONENTS must be a string or nil.
+DIRECTORY or the non-final elements in COMPONENTS may or may not end
+with a slash -- if they don't end with a slash, a slash will be
+inserted before contatenating."
+    (save-match-data
+      (mapconcat
+       #'identity
+       (delq nil
+             (mapcar
+              (lambda (str)
+                (when (and str (not (seq-empty-p str))
+                           (string-match "\\(.+\\)/?" str))
+                  (match-string 1 str)))
+              (cons directory components)))
+       "/"))))
+
 (if (fboundp 'directory-empty-p)
     (defalias 'org-directory-empty-p #'directory-empty-p)
   (defun org-directory-empty-p (dir)
@@ -83,6 +106,17 @@
 
 
 ;;; Emacs < 27.1 compatibility
+
+(unless (fboundp 'combine-change-calls)
+  ;; A stub when `combine-change-calls' was not yet there.
+  (defmacro combine-change-calls (_beg _end &rest body)
+    (declare (debug (form form def-body)) (indent 2))
+    `(progn ,@body)))
+
+(if (version< emacs-version "27.1")
+    (defsubst org-replace-buffer-contents (source &optional _max-secs _max-costs)
+      (replace-buffer-contents source))
+  (defalias 'org-replace-buffer-contents #'replace-buffer-contents))
 
 (unless (fboundp 'proper-list-p)
   ;; `proper-list-p' was added in Emacs 27.1.  The function below is
@@ -181,70 +215,6 @@ This is a floating point number if the size is too large for an integer."
     (nth 7 attributes)))
 
 
-;;; Emacs < 25.1 compatibility
-
-(when (< emacs-major-version 25)
-  (defalias 'outline-hide-entry 'hide-entry)
-  (defalias 'outline-hide-sublevels 'hide-sublevels)
-  (defalias 'outline-hide-subtree 'hide-subtree)
-  (defalias 'outline-show-branches 'show-branches)
-  (defalias 'outline-show-children 'show-children)
-  (defalias 'outline-show-entry 'show-entry)
-  (defalias 'outline-show-subtree 'show-subtree)
-  (defalias 'xref-find-definitions 'find-tag)
-  (defalias 'format-message 'format)
-  (defalias 'gui-get-selection 'x-get-selection))
-
-(unless (fboundp 'directory-name-p)
-  (defun directory-name-p (name)
-    "Return non-nil if NAME ends with a directory separator character."
-    (let ((len (length name))
-	  (lastc ?.))
-      (if (> len 0)
-	  (setq lastc (aref name (1- len))))
-      (or (= lastc ?/)
-	  (and (memq system-type '(windows-nt ms-dos))
-	       (= lastc ?\\))))))
-
-;; `string-collate-lessp' is new in Emacs 25.
-(if (fboundp 'string-collate-lessp)
-    (defalias 'org-string-collate-lessp
-      'string-collate-lessp)
-  (defun org-string-collate-lessp (s1 s2 &rest _)
-    "Return non-nil if STRING1 is less than STRING2 in lexicographic order.
-Case is significant."
-    (string< s1 s2)))
-
-;; The time- functions below translate nil to `current-time' and
-;; accept an integer as of Emacs 25.  `decode-time' and
-;; `format-time-string' accept nil on Emacs 24 but don't accept an
-;; integer until Emacs 25.
-(if (< emacs-major-version 25)
-    (let ((convert
-           (lambda (time)
-             (cond ((not time) (current-time))
-                   ((numberp time) (seconds-to-time time))
-                   (t time)))))
-      (defun org-decode-time (&optional time)
-        (decode-time (funcall convert time)))
-      (defun org-format-time-string (format-string &optional time universal)
-        (format-time-string format-string (funcall convert time) universal))
-      (defun org-time-add (a b)
-        (time-add (funcall convert a) (funcall convert b)))
-      (defun org-time-subtract (a b)
-        (time-subtract (funcall convert a) (funcall convert b)))
-      (defun org-time-since (time)
-        (time-since (funcall convert time)))
-      (defun org-time-less-p (t1 t2)
-        (time-less-p (funcall convert t1) (funcall convert t2))))
-  (defalias 'org-decode-time 'decode-time)
-  (defalias 'org-format-time-string 'format-time-string)
-  (defalias 'org-time-add 'time-add)
-  (defalias 'org-time-subtract 'time-subtract)
-  (defalias 'org-time-since 'time-since)
-  (defalias 'org-time-less-p 'time-less-p))
-
-
 ;;; Obsolete aliases (remove them after the next major release).
 
 ;;;; XEmacs compatibility, now removed.
@@ -289,6 +259,14 @@ Counting starts at 1."
                "use cl-subseq (note the 0-based counting)."
                "9.0")
 
+;;;; Functions available since Emacs 25.1
+(define-obsolete-function-alias 'org-string-collate-lessp 'string-collate-lessp "9.6")
+(define-obsolete-function-alias 'org-decode-time 'decode-time "9.6")
+(define-obsolete-function-alias 'org-format-time-string 'format-time-string "9.6")
+(define-obsolete-function-alias 'org-time-add 'time-add "9.6")
+(define-obsolete-function-alias 'org-time-subtract 'time-subtract "9.6")
+(define-obsolete-function-alias 'org-time-since 'time-since "9.6")
+(define-obsolete-function-alias 'org-time-less-p 'time-less-p "9.6")
 
 ;;;; Functions available since Emacs 24.3
 (define-obsolete-function-alias 'org-buffer-narrowed-p 'buffer-narrowed-p "9.0")
@@ -534,16 +512,16 @@ use of this function is for the stuck project list."
   'org-duration-to-minutes "9.1")
 
 (make-obsolete-variable 'org-time-clocksum-format
-  "set `org-duration-format' instead." "9.1")
+                        "set `org-duration-format' instead." "9.1")
 
 (make-obsolete-variable 'org-time-clocksum-use-fractional
-  "set `org-duration-format' instead." "9.1")
+                        "set `org-duration-format' instead." "9.1")
 
 (make-obsolete-variable 'org-time-clocksum-fractional-format
-  "set `org-duration-format' instead." "9.1")
+                        "set `org-duration-format' instead." "9.1")
 
 (make-obsolete-variable 'org-time-clocksum-use-effort-durations
-  "set `org-duration-units' instead." "9.1")
+                        "set `org-duration-units' instead." "9.1")
 
 (define-obsolete-function-alias 'org-babel-number-p
   'org-babel--string-to-number "9.0")
@@ -771,6 +749,8 @@ context.  See the individual commands for more information."
  "9.4")
 
 (define-obsolete-function-alias 'org-copy 'org-refile-copy "9.4")
+
+(define-obsolete-function-alias 'org-get-last-sibling 'org-get-previous-sibling "9.4")
 
 ;;;; Obsolete link types
 
@@ -1047,9 +1027,9 @@ ELEMENT is the element at point."
     (cl-case (org-element-type object)
       ;; Prevent checks in links due to keybinding conflict with
       ;; Flyspell.
-      ((code entity export-snippet inline-babel-call
-	     inline-src-block line-break latex-fragment link macro
-	     statistics-cookie target timestamp verbatim)
+      ((citation citation-reference code entity export-snippet inline-babel-call
+	         inline-src-block line-break latex-fragment link macro
+	         statistics-cookie target timestamp verbatim)
        nil)
       (footnote-reference
        ;; Only in inline footnotes, within the definition.
@@ -1074,8 +1054,8 @@ ELEMENT is the element at point."
 	   (or (not (match-beginning 5))
 	       (< (point) (match-beginning 5)))
            ;; Ignore checks in code, verbatim and others.
-           (org--flyspell-object-check-p (org-element-at-point)))
-    (let* ((element (org-element-at-point))
+           (org--flyspell-object-check-p (org-element-at-point-no-context)))
+    (let* ((element (org-element-at-point-no-context))
 	   (post-affiliated (org-element-property :post-affiliated element)))
       (cond
        ;; Ignore checks in all affiliated keywords but captions.

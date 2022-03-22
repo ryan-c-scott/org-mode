@@ -9,7 +9,7 @@ all:		$(ORG_MAKE_DOC)
 
 info:		org orgguide
 
-html:		org.html
+html:		org.html orgguide.html
 
 pdf:		org.pdf orgguide.pdf
 
@@ -27,11 +27,17 @@ guide::		orgguide.texi org-version.inc
 	../mk/guidesplit.pl $@/*
 endif
 
-org.texi orgguide.texi:	org-manual.org org-guide.org
+org.texi:	org-manual.org
 	$(BATCH) 				      \
 	  --eval '(add-to-list `load-path "../lisp")' \
 	  --eval '(load "../mk/org-fixup.el")' 	      \
-	  --eval '(org-make-manuals)'
+	  --eval '(org-make-manual)'
+
+orgguide.texi:	org-guide.org
+	$(BATCH) 				      \
+	  --eval '(add-to-list `load-path "../lisp")' \
+	  --eval '(load "../mk/org-fixup.el")' 	      \
+	  --eval '(org-make-guide)'
 
 org-version.inc:	org.texi
 	@echo "org-version: $(ORGVERSION) ($(GITVERSION))"
@@ -54,9 +60,9 @@ install:	org orgguide
 	$(INSTALL_INFO) --infodir=$(DESTDIR)$(infodir) orgguide.info
 
 clean:
-	$(RM) org orgguide *.pdf *.html *_letter.tex org-version.inc \
-	      org-version.tex *.aux *.cp *.cps *.dvi *.fn *.fns *.ky *.kys \
-              *.pg *.pgs *.toc *.tp *.tps *.vr *.vrs *.log *.html *.ps
+	$(RM) *.pdf *.html *.info *_letter.tex org-version.inc org-version.tex \
+	      *.aux *.cp *.cps *.dvi *.fn *.fns *.ky *.kys *.pg *.pgs *.toc \
+              *.tp *.tps *.vr *.vrs *.log *.ps
 cleanall:	clean
 	$(RM) org.texi orgguide.texi
 	$(RMR) guide manual

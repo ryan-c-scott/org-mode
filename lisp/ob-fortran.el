@@ -1,6 +1,6 @@
 ;;; ob-fortran.el --- Babel Functions for Fortran    -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2011-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2022 Free Software Foundation, Inc.
 
 ;; Authors: Sergey Litvinov
 ;;       Eric Schulte
@@ -157,7 +157,7 @@ of the same value."
       (format "real, parameter :: %S(%d) = %s\n"
 	      var (length val) (org-babel-fortran-transform-list val)))
      (t
-      (error "the type of parameter %s is not supported by ob-fortran" var)))))
+      (error "The type of parameter %s is not supported by ob-fortran" var)))))
 
 (defun org-babel-fortran-transform-list (val)
   "Return a fortran representation of enclose syntactic lists."

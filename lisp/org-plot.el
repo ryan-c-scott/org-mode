@@ -1,6 +1,6 @@
 ;;; org-plot.el --- Support for Plotting from Org -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2022 Free Software Foundation, Inc.
 ;;
 ;; Author: Eric Schulte <schulte dot eric at gmail dot com>
 ;; Maintainer: TEC <tecosaur@gmail.com>
@@ -204,17 +204,17 @@ of the NUMS."
 	 (nice-max (if (= range 0) (car nums)
 		     (/ (float (ceiling (* maximum range-factor))) range-factor))))
     `(:min ,minimum :max ,maximum :range ,range
-      :range-factor ,range-factor
-      :nice-min ,nice-min :nice-max ,nice-max :nice-range ,(- nice-max nice-min))))
+           :range-factor ,range-factor
+           :nice-min ,nice-min :nice-max ,nice-max :nice-range ,(- nice-max nice-min))))
 
 (defun org--plot/sensible-tick-num (table &optional hard-min hard-max)
   "From a the values in a TABLE of data, guess an appropriate number of ticks.
 If HARD-MIN and HARD-MAX can be used to fix the ends of the axis."
   (let* ((row-data
 	  (mapcar (lambda (row) (org--plot/values-stats
-			    (mapcar #'string-to-number (cdr row))
-			    hard-min
-			    hard-max)) table))
+			         (mapcar #'string-to-number (cdr row))
+			         hard-min
+			         hard-max)) table))
 	 (row-normalised-ranges (mapcar (lambda (r-data)
 					  (let ((val (round (*
 							     (plist-get r-data :range-factor)
@@ -230,7 +230,7 @@ If HARD-MIN and HARD-MAX can be used to fix the ends of the axis."
 
 (defun org--plot/nice-frequency-pick (frequencies)
   "From a list of FREQUENCIES, try to sensibly pick a sample of the most frequent."
-  ;; TODO this mosly works decently, but counld do with some tweaking to work more consistently.
+  ;; TODO this mosly works decently, but could do with some tweaking to work more consistently.
   (cl-case (length frequencies)
     (1 (list (car (nth 0 frequencies))))
     (2 (if (<= 3 (/ (cdr (nth 0 frequencies))
@@ -354,7 +354,7 @@ the argument, and must return a string to be used."
     (radar :plot-func
 	   (lambda (table _data-file _num-cols params plot-str)
 	     (list (org--plot/radar table params)))))
-  "List of plists describing the avalible plot types.
+  "List of plists describing the available plot types.
 The car is the type name, and the property :plot-func must be
 set.  The value of :plot-func is a lambda which yields plot-lines
 \(a list of strings) as the cdr.
@@ -392,7 +392,7 @@ be set.
    Accepts string, nil, or lambda function which returns string
    or nil.  Defaults to nil."
   :group 'org-plot
-  :type '(alist :value-type (symbol group)))
+  :type 'alist)
 
 (defvar org--plot/radar-template
   "### spider plot/chart with gnuplot
@@ -405,7 +405,7 @@ set angles degree
 set key bmargin center horizontal
 unset border
 
-# Load data and settup
+# Load data and setup
 load \"%s\"
 
 # General settings
@@ -682,9 +682,10 @@ line directly before or after the table."
 				  (looking-at "[[:space:]]*#\\+"))
 			(setf params (org-plot/collect-options params))))
       ;; Dump table to datafile
-      (if-let ((dump-func (plist-get type :data-dump)))
-	  (funcall dump-func table data-file num-cols params)
-	(org-plot/gnuplot-to-data table data-file params))
+      (let ((dump-func (plist-get type :data-dump)))
+        (if dump-func
+	    (funcall dump-func table data-file num-cols params)
+	  (org-plot/gnuplot-to-data table data-file params)))
       ;; Check type of ind column (timestamp? text?)
       (when (plist-get params :check-ind-type)
 	(let* ((ind (1- (plist-get params :ind)))

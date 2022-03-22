@@ -1,6 +1,6 @@
 ;;; org-list.el --- Plain lists for Org              -*- lexical-binding: t; -*-
 ;;
-;; Copyright (C) 2004-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;;	   Bastien Guerry <bzg@gnu.org>
@@ -103,7 +103,7 @@
 (declare-function org-back-to-heading "org" (&optional invisible-ok))
 (declare-function org-before-first-heading-p "org" ())
 (declare-function org-current-level "org" ())
-(declare-function org-element-at-point "org-element" ())
+(declare-function org-element-at-point "org-element" (&optional pom cached-only))
 (declare-function org-element-context "org-element" (&optional element))
 (declare-function org-element-interpret-data "org-element" (data))
 (declare-function org-element-lineage "org-element" (blob &optional types with-self))
@@ -133,7 +133,7 @@
 (declare-function org-inlinetask-outline-regexp "org-inlinetask" ())
 (declare-function org-level-increment "org" ())
 (declare-function org-mode "org" ())
-(declare-function org-narrow-to-subtree "org" ())
+(declare-function org-narrow-to-subtree "org" (&optional element))
 (declare-function org-outline-level "org" ())
 (declare-function org-previous-line-empty-p "org" ())
 (declare-function org-reduced-level "org" (L))
@@ -1442,7 +1442,7 @@ This function returns, destructively, the new list structure."
 		      (save-excursion
 			(goto-char (org-list-get-last-item item struct prevs))
 			(point-at-eol)))
-		     ((string-match-p "\\`[0-9]+\\'" dest)
+		     ((and (stringp dest) (string-match-p "\\`[0-9]+\\'" dest))
 		      (let* ((all (org-list-get-all-items item struct prevs))
 			     (len (length all))
 			     (index (mod (string-to-number dest) len)))
@@ -2910,7 +2910,7 @@ function is being called interactively."
 		   (error "Missing key extractor"))))
 	 (sort-func
 	  (cond
-	   ((= dcst ?a) #'org-string-collate-lessp)
+	   ((= dcst ?a) #'string-collate-lessp)
 	   ((= dcst ?f)
 	    (or compare-func
 		(and interactive?
@@ -3348,7 +3348,7 @@ Valid parameters are:
     (when (and backend (symbolp backend) (not (org-export-get-backend backend)))
       (user-error "Unknown :backend value"))
     (unless backend (require 'ox-org))
-    ;; When`:raw' property has a non-nil value, turn all objects back
+    ;; When ':raw' property has a non-nil value, turn all objects back
     ;; into Org syntax.
     (when (and backend (plist-get params :raw))
       (org-element-map data org-element-all-objects

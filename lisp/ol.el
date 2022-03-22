@@ -1,6 +1,6 @@
 ;;; ol.el --- Org links library                      -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2018-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2018-2022 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -47,7 +47,7 @@
 (declare-function org-back-to-heading "org" (&optional invisible-ok))
 (declare-function org-before-first-heading-p "org" ())
 (declare-function org-do-occur "org" (regexp &optional cleanup))
-(declare-function org-element-at-point "org-element" ())
+(declare-function org-element-at-point "org-element" (&optional pom cached-only))
 (declare-function org-element-cache-refresh "org-element" (pos))
 (declare-function org-element-context "org-element" (&optional element))
 (declare-function org-element-lineage "org-element" (datum &optional types with-self))
@@ -178,13 +178,12 @@ link.
   :group 'org-link
   :package-version '(Org . "9.1")
   :type '(alist :tag "Link display parameters"
-		:value-type plist)
-  :safe nil)
+		:value-type plist))
 
 (defcustom org-link-descriptive t
   "Non-nil means Org displays descriptive links.
 
-E.g. [[https://orgmode.org][Org website]] is be displayed as
+E.g. [[https://orgmode.org][Org website]] is displayed as
 \"Org Website\", hiding the link itself and just displaying its
 description.  When set to nil, Org displays the full links
 literally.
@@ -335,8 +334,7 @@ another window."
 	  (cons (const wl)
 		(choice
 		 (const wl)
-		 (const wl-other-frame))))
-  :safe nil)
+		 (const wl-other-frame)))))
 
 (defcustom org-link-search-must-match-exact-headline 'query-to-create
   "Non-nil means internal fuzzy links can only match headlines.
@@ -385,15 +383,13 @@ single keystroke rather than having to type \"yes\"."
   :type '(choice
 	  (const :tag "with yes-or-no (safer)" yes-or-no-p)
 	  (const :tag "with y-or-n (faster)" y-or-n-p)
-	  (const :tag "no confirmation (dangerous)" nil))
-  :safe nil)
+	  (const :tag "no confirmation (dangerous)" nil)))
 
 (defcustom org-link-shell-skip-confirm-regexp ""
   "Regexp to skip confirmation for shell links."
   :group 'org-link-follow
   :version "24.1"
-  :type 'regexp
-  :safe nil)
+  :type 'regexp)
 
 (defcustom org-link-elisp-confirm-function 'yes-or-no-p
   "Non-nil means ask for confirmation before executing Emacs Lisp links.
@@ -410,15 +406,13 @@ single keystroke rather than having to type \"yes\"."
   :type '(choice
 	  (const :tag "with yes-or-no (safer)" yes-or-no-p)
 	  (const :tag "with y-or-n (faster)" y-or-n-p)
-	  (const :tag "no confirmation (dangerous)" nil))
-  :safe nil)
+	  (const :tag "no confirmation (dangerous)" nil)))
 
 (defcustom org-link-elisp-skip-confirm-regexp ""
   "A regexp to skip confirmation for Elisp links."
   :group 'org-link-follow
   :version "24.1"
-  :type 'regexp
-  :safe nil)
+  :type 'regexp)
 
 (defgroup org-link-store nil
   "Options concerning storing links in Org mode."
@@ -442,7 +436,7 @@ negates this setting for the duration of the command."
   :safe (lambda (val) (or (booleanp val) (integerp val))))
 
 (defcustom org-link-email-description-format "Email %c: %s"
-  "Format of the description part of a link to an email or usenet message.
+  "Format of the description part of a link to an email or Usenet message.
 The following %-escapes will be replaced by corresponding information:
 
 %F   full \"From\" field
@@ -506,7 +500,7 @@ links more efficient."
   "Regular expression matching radio targets in plain text.")
 
 (defvar org-link-types-re nil
-  "Matches a link that has a url-like prefix like \"http:\"")
+  "Matches a link that has a url-like prefix like \"http:\".")
 
 (defvar org-link-angle-re nil
   "Matches link with angular brackets, spaces are allowed.")
@@ -929,7 +923,7 @@ and dates."
 
 (defun org-link-encode (text table)
   "Return percent escaped representation of string TEXT.
-TEXT is a string with the text to escape. TABLE is a list of
+TEXT is a string with the text to escape.  TABLE is a list of
 characters that should be escaped."
   (mapconcat
    (lambda (c)
@@ -1328,7 +1322,7 @@ PATH is the sexp to evaluate, as a string."
 	       (string-match-p org-link-elisp-skip-confirm-regexp path))
 	  (not org-link-elisp-confirm-function)
 	  (funcall org-link-elisp-confirm-function
-		   (format "Execute %S as Elisp? "
+		   (format "Execute %s as Elisp? "
 			   (org-add-props path nil 'face 'org-warning))))
       (message "%s => %s" path
 	       (if (eq ?\( (string-to-char path))
@@ -1383,7 +1377,7 @@ PATH is the command to execute, as a string."
 	       (string-match-p org-link-shell-skip-confirm-regexp path))
 	  (not org-link-shell-confirm-function)
 	  (funcall org-link-shell-confirm-function
-		   (format "Execute %S in shell? "
+		   (format "Execute %s in shell? "
 			   (org-add-props path nil 'face 'org-warning))))
       (let ((buf (generate-new-buffer "*Org Shell Output*")))
 	(message "Executing %s" path)
@@ -1815,12 +1809,13 @@ Use TAB to complete link prefixes, then RET for type-specific completion support
 			     (reverse org-stored-links)
 			     "\n")))
 	(goto-char (point-min)))
-      (let ((cw (selected-window)))
-	(select-window (get-buffer-window "*Org Links*" 'visible))
-	(with-current-buffer "*Org Links*" (setq truncate-lines t))
-	(unless (pos-visible-in-window-p (point-max))
-	  (org-fit-window-to-buffer))
-	(and (window-live-p cw) (select-window cw)))
+      (when (get-buffer-window "*Org Links*" 'visible)
+        (let ((cw (selected-window)))
+	  (select-window (get-buffer-window "*Org Links*" 'visible))
+	  (with-current-buffer "*Org Links*" (setq truncate-lines t))
+	  (unless (pos-visible-in-window-p (point-max))
+	    (org-fit-window-to-buffer))
+	  (and (window-live-p cw) (select-window cw))))
       (setq all-prefixes (append (mapcar #'car abbrevs)
 				 (mapcar #'car org-link-abbrev-alist)
 				 (org-link-types)))
@@ -2025,7 +2020,8 @@ Also refresh fontification if needed."
 				    (list old-regexp org-target-link-regexp)
 				    "\\|")
 				   after-re)))))
-	(when (featurep 'org-element)
+	(when (and (featurep 'org-element)
+                   (not (bound-and-true-p org-mode-loading)))
 	  (org-with-point-at 1
 	    (while (re-search-forward regexp nil t)
 	      (org-element-cache-refresh (match-beginning 1))))))

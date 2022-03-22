@@ -1,6 +1,6 @@
 ;;; ob-plantuml.el --- Babel Functions for Plantuml  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2010-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2022 Free Software Foundation, Inc.
 
 ;; Author: Zhang Weize
 ;; Keywords: literate programming, reproducible research
@@ -84,9 +84,9 @@ contain multiple entries for the key `:var'.  `:var' entries in PARAMS
 are expected to be scalar variables."
   (mapcar
    (lambda (pair)
-       (format "!define %s %s"
-	       (car pair)
-	       (replace-regexp-in-string "\"" "" (cdr pair))))
+     (format "!define %s %s"
+	     (car pair)
+	     (replace-regexp-in-string "\"" "" (cdr pair))))
    (org-babel--get-vars params)))
 
 (defun org-babel-plantuml-make-body (body params)
@@ -122,6 +122,7 @@ This function is called by `org-babel-execute-src-block'."
 				((not (file-exists-p org-plantuml-jar-path))
 				 (error "Could not find plantuml.jar at %s" org-plantuml-jar-path))
 				(t (list java
+					 "-Djava.awt.headless=true"
 					 "-jar"
 					 (shell-quote-argument (expand-file-name org-plantuml-jar-path))))))
 	 (full-body (org-babel-plantuml-make-body body params))

@@ -1,6 +1,6 @@
 ;;; org-keys.el --- Key bindings for Org mode        -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2018-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2018-2022 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <mail@nicolasgoaziou.fr>
 
@@ -58,7 +58,6 @@
 (declare-function org-clone-subtree-with-time-shift "org" (n &optional shift))
 (declare-function org-columns "org" (&optional global columns-fmt-string))
 (declare-function org-comment-dwim "org" (arg))
-(declare-function org-refile-copy "org" ())
 (declare-function org-copy-special "org" ())
 (declare-function org-copy-visible "org" (beg end))
 (declare-function org-ctrl-c-ctrl-c "org" (&optional arg))
@@ -82,7 +81,7 @@
 (declare-function org-display-outline-path "org" (&optional file current separator just-return-string))
 (declare-function org-down-element "org" ())
 (declare-function org-edit-special "org" (&optional arg))
-(declare-function org-element-at-point "org-element" ())
+(declare-function org-element-at-point "org-element" (&optional pom cached-only))
 (declare-function org-element-type "org-element" (element))
 (declare-function org-emphasize "org" (&optional char))
 (declare-function org-end-of-line "org" (&optional n))
@@ -129,7 +128,7 @@
 (declare-function org-metaup "org" (&optional _arg))
 (declare-function org-narrow-to-block "org" ())
 (declare-function org-narrow-to-element "org" ())
-(declare-function org-narrow-to-subtree "org" ())
+(declare-function org-narrow-to-subtree "org" (&optional element))
 (declare-function org-next-block "org" (arg &optional backward block-regexp))
 (declare-function org-next-link "org" (&optional search-backward))
 (declare-function org-next-visible-heading "org" (arg))
@@ -145,6 +144,8 @@
 (declare-function org-promote-subtree "org" ())
 (declare-function org-redisplay-inline-images "org" ())
 (declare-function org-refile "org" (&optional arg1 default-buffer rfloc msg))
+(declare-function org-refile-copy "org" ())
+(declare-function org-refile-reverse "org-refile" (&optional arg default-buffer rfloc msg))
 (declare-function org-reftex-citation "org" ())
 (declare-function org-reload "org" (&optional arg1))
 (declare-function org-remove-file "org" (&optional file))
@@ -278,8 +279,7 @@ before org.el is loaded."
   :type '(choice
 	  (const :tag "A double click follows the link" double)
 	  (const :tag "Unconditionally follow the link with mouse-1" t)
-	  (integer :tag "mouse-1 click does not follow the link if longer than N ms" 450))
-  :safe t)
+	  (integer :tag "mouse-1 click does not follow the link if longer than N ms" 450)))
 
 (defcustom org-tab-follows-link nil
   "Non-nil means on links TAB will follow the link.
@@ -299,7 +299,7 @@ implementation is bad."
 In tables, the special behavior of RET has precedence."
   :group 'org-link-follow
   :type 'boolean
-  :safe t)
+  :safe #'booleanp)
 
 
 ;;; Functions
@@ -444,7 +444,7 @@ COMMANDS is a list of alternating OLDDEF NEWDEF command names."
 
 ;;;; TAB key with modifiers
 (org-defkey org-mode-map (kbd "TAB") #'org-cycle)
-(org-defkey org-mode-map (kbd "C-c C-TAB") #'org-force-cycle-archived)
+(org-defkey org-mode-map (kbd "C-c C-<tab>") #'org-force-cycle-archived)
 ;; Override text-mode binding to expose `complete-symbol' for
 ;; pcomplete functionality.
 (org-defkey org-mode-map (kbd "M-TAB") nil)

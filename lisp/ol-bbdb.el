@@ -1,6 +1,6 @@
 ;;; ol-bbdb.el --- Links to BBDB entries             -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 
 ;; Authors: Carsten Dominik <carsten.dominik@gmail.com>
 ;;       Thomas Baumann <thomas dot baumann at ch dot tum dot de>
@@ -60,7 +60,7 @@
 ;;
 ;; CLASS-OR-FORMAT-STRING is one of two things:
 ;;
-;;  - an identifier for a class of anniversaries (eg. birthday or
+;;  - an identifier for a class of anniversaries (e.g. birthday or
 ;;    wedding) from `org-bbdb-anniversary-format-alist' which then
 ;;    defines the format string for this class
 ;;  - the (format) string displayed in the diary.

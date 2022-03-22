@@ -251,6 +251,45 @@
                (car boundaries)
                (cdr boundaries)))))))
 
+(ert-deftest test-org-cite/main-affixes ()
+  "Test `org-cite-main-affixes'."
+  (should
+   (equal '(nil . nil)
+          (org-test-with-temp-text "[cite:@key]"
+            (org-cite-main-affixes (org-element-context)))))
+  (should
+   (equal '(nil . nil)
+          (org-test-with-temp-text "[cite:@key1;@key2]"
+            (org-cite-main-affixes (org-element-context)))))
+  (should
+   (equal '(("pre ") . nil)
+          (org-test-with-temp-text "[cite:pre @key]"
+            (org-cite-main-affixes (org-element-context)))))
+  (should
+   (equal '(("pre ") . (" post"))
+          (org-test-with-temp-text "[cite:pre @key post]"
+            (org-cite-main-affixes (org-element-context)))))
+  (should
+   (equal '(("pre ") . nil)
+          (org-test-with-temp-text "[cite:global pre;pre @key]"
+            (org-cite-main-affixes (org-element-context)))))
+  (should
+   (equal '(nil . (" post"))
+          (org-test-with-temp-text "[cite:@key post;global post]"
+            (org-cite-main-affixes (org-element-context)))))
+  (should
+   (equal '(("global pre") . ("global post"))
+          (org-test-with-temp-text "[cite:global pre;@key1;@key2;global post]"
+            (org-cite-main-affixes (org-element-context)))))
+  (should
+   (equal '(("global pre") . nil)
+          (org-test-with-temp-text "[cite:global pre;pre1 @key1;pre2 @key2]"
+            (org-cite-main-affixes (org-element-context)))))
+  (should
+   (equal '(nil . (" global post"))
+          (org-test-with-temp-text "[cite:@key1 post1;@key2 post2; global post]"
+            (org-cite-main-affixes (org-element-context))))))
+
 (ert-deftest test-org-cite/supported-styles ()
   "Test `org-cite-supported-styles'."
   ;; Default behavior is to use export processors.
@@ -266,6 +305,14 @@
                 (org-cite-export-processors '((t test))))
             (org-cite-register-processor 'test
               :cite-styles '((("foo" "f")) ((""))))
+            (org-cite-supported-styles))))
+  ;; Also support functions generating the list.
+  (should
+   (equal '((("foo" "f")) (("")))
+          (let ((org-cite--processors nil)
+                (org-cite-export-processors '((t test))))
+            (org-cite-register-processor 'test
+              :cite-styles (lambda () '((("foo" "f")) (("")))))
             (org-cite-supported-styles))))
   ;; Explicitly provide a processor.
   (should
@@ -723,6 +770,41 @@
                 (org-cite-register-processor 'foo
                   :export-citation (lambda (_ s _ _) (throw :exit s)))
                 (org-export-as (org-export-create-backend))))))))
+
+(ert-deftest test-org-cite/read-processor-declaration ()
+  "Test `org-cite-read-processor-declaration'."
+  ;; Argument should contain 1-3 tokens.
+  (should-error
+   (org-cite-read-processor-declaration ""))
+  (should
+   (equal '(foo nil nil)
+          (org-cite-read-processor-declaration "foo")))
+  (should
+   (equal '(foo "bar" nil)
+          (org-cite-read-processor-declaration "foo bar")))
+  (should
+   (equal '(foo "bar" "baz")
+          (org-cite-read-processor-declaration "foo bar baz")))
+  (should-error
+   (org-cite-read-processor-declaration "foo bar baz qux"))
+  ;; nil in second and third arguments is read as `nil'.
+  (should
+   (equal '(foo nil "baz")
+          (org-cite-read-processor-declaration "foo nil baz")))
+  (should
+   (equal '(foo "bar" nil)
+          (org-cite-read-processor-declaration "foo bar nil")))
+  ;; Second and third arguments may contain spaces if they are quoted.
+  (should
+   (equal '(foo "bar baz" nil)
+          (org-cite-read-processor-declaration "foo \"bar baz\"")))
+  (should
+   (equal '(foo "bar" "baz qux")
+          (org-cite-read-processor-declaration "foo bar \"baz qux\"")))
+  ;; Spurious spaces are ignored.
+  (should
+   (equal '(foo "bar" "baz")
+          (org-cite-read-processor-declaration "  foo   bar    baz  "))))
 
 (ert-deftest test-org-cite/list-citations ()
   "Test `org-cite-list-citations'."
@@ -1273,7 +1355,7 @@ arguments.  Replace citation with \"@\" character in the output."
                   (list "b" (org-element-create 'bold nil "c"))) " ")))))
 
 
-;;; TEST capabilities.
+;;; Test capabilities.
 (ert-deftest test-org-cite/activate-capability ()
   "Test \"activate\" capability."
   ;; Standard test.
@@ -1393,6 +1475,29 @@ arguments.  Replace citation with \"@\" character in the output."
                               '((section . (lambda (_ c _) c))
                                 (paragraph . (lambda (_ c _) c))
                                 (bold . (lambda (&rest _) "bold")))))))))
+  ;; Make sure to have a space between a quote and a citation.
+  (should
+   (equal "\"quotation\" citation\n"
+          (org-test-with-temp-text "\"quotation\"[cite:@key]"
+            (let ((org-cite--processors nil)
+                  (org-cite-export-processors '((t . (foo nil nil)))))
+              (org-cite-register-processor 'foo
+                :export-citation (lambda (&rest _) "citation"))
+              (org-export-as (org-export-create-backend
+                              :transcoders
+                              '((section . (lambda (_ c _) c))
+                                (paragraph . (lambda (_ c _) c)))))))))
+  (should
+   (equal "\"quotation\"  citation\n"
+          (org-test-with-temp-text "\"quotation\"  [cite:@key]"
+            (let ((org-cite--processors nil)
+                  (org-cite-export-processors '((t . (foo nil nil)))))
+              (org-cite-register-processor 'foo
+                :export-citation (lambda (&rest _) "citation"))
+              (org-export-as (org-export-create-backend
+                              :transcoders
+                              '((section . (lambda (_ c _) c))
+                                (paragraph . (lambda (_ c _) c)))))))))
   ;; Regular bibliography export.
   (should
    (eq 'success
@@ -1764,6 +1869,49 @@ arguments.  Replace citation with \"@\" character in the output."
   ;; Throw an error if the location is inappropriate for a citation.
   (should-error
    (org-test-with-temp-text "=verbatim<point> text="
+     (let ((org-cite--processors nil)
+           (org-cite-insert-processor 'foo))
+       (org-cite-register-processor 'foo
+         :insert (lambda (_ _) (throw :exit 'success)))
+       (call-interactively #'org-cite-insert))))
+  ;; Allow inserting citations at the beginning of a footnote
+  ;; definition, right after the label.
+  (should
+   (eq 'success
+       (catch :exit
+         (org-test-with-temp-text "[fn:1]<point>"
+           (let ((org-cite--processors nil)
+                 (org-cite-insert-processor 'foo))
+             (org-cite-register-processor 'foo
+               :insert (lambda (_ _) (throw :exit 'success)))
+             (call-interactively #'org-cite-insert))))))
+  (should
+   (eq 'success
+       (catch :exit
+         (org-test-with-temp-text "[fn:1] <point>"
+           (let ((org-cite--processors nil)
+                 (org-cite-insert-processor 'foo))
+             (org-cite-register-processor 'foo
+               :insert (lambda (_ _) (throw :exit 'success)))
+             (call-interactively #'org-cite-insert))))))
+  (should
+   (eq 'success
+       (catch :exit
+         (org-test-with-temp-text "[fn:1]<point>\nParagraph"
+           (let ((org-cite--processors nil)
+                 (org-cite-insert-processor 'foo))
+             (org-cite-register-processor 'foo
+               :insert (lambda (_ _) (throw :exit 'success)))
+             (call-interactively #'org-cite-insert))))))
+  (should-error
+   (org-test-with-temp-text "[fn:1<point>]"
+     (let ((org-cite--processors nil)
+           (org-cite-insert-processor 'foo))
+       (org-cite-register-processor 'foo
+         :insert (lambda (_ _) (throw :exit 'success)))
+       (call-interactively #'org-cite-insert))))
+  (should-error
+   (org-test-with-temp-text "<point>[fn:1]"
      (let ((org-cite--processors nil)
            (org-cite-insert-processor 'foo))
        (org-cite-register-processor 'foo

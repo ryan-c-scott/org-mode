@@ -1,6 +1,6 @@
 ;;; ol-bibtex.el --- Links to BibTeX entries        -*- lexical-binding: t; -*-
 ;;
-;; Copyright (C) 2007-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2022 Free Software Foundation, Inc.
 ;;
 ;; Authors: Bastien Guerry <bzg@gnu.org>
 ;;       Carsten Dominik <carsten dot dominik at gmail dot com>
@@ -115,7 +115,7 @@
 
 (defvar org-agenda-overriding-header)
 (defvar org-agenda-search-view-always-boolean)
-(defvar org-bibtex-description nil) ; dynamically scoped from org.el
+(defvar org-bibtex-description nil)
 (defvar org-id-locations)
 (defvar org-property-end-re)
 (defvar org-special-properties)
@@ -133,7 +133,7 @@
 (declare-function org-heading-components "org" ())
 (declare-function org-insert-heading "org" (&optional arg invisible-ok top))
 (declare-function org-map-entries "org" (func &optional match scope &rest skip))
-(declare-function org-narrow-to-subtree "org" ())
+(declare-function org-narrow-to-subtree "org" (&optional element))
 (declare-function org-set-property "org" (property value))
 (declare-function org-toggle-tag "org" (tag &optional onoff))
 
@@ -655,11 +655,12 @@ With a prefix arg, query for optional fields."
 
 (defun org-bibtex-read ()
   "Read a bibtex entry and save to `org-bibtex-entries'.
-This uses `bibtex-parse-entry'."
+This uses `bibtex-parse-entry'.
+Return the new value of `org-bibtex-entries'."
   (interactive)
   (let ((keyword (lambda (str) (intern (concat ":" (downcase str)))))
 	(clean-space (lambda (str) (replace-regexp-in-string
-			       "[[:space:]\n\r]+" " " str)))
+			            "[[:space:]\n\r]+" " " str)))
 	(strip-delim
 	 (lambda (str)		     ; strip enclosing "..." and {...}
 	   (dolist (pair '((34 . 34) (123 . 125)))
@@ -677,7 +678,9 @@ This uses `bibtex-parse-entry'."
                        (_ field)))
                    (funcall clean-space (funcall strip-delim (cdr pair)))))
            (save-excursion (bibtex-beginning-of-entry) (bibtex-parse-entry)))
-          org-bibtex-entries)))
+          org-bibtex-entries)
+    (unless (car org-bibtex-entries) (pop org-bibtex-entries))
+    org-bibtex-entries))
 
 (defun org-bibtex-read-buffer (buffer)
   "Read all bibtex entries in BUFFER and save to `org-bibtex-entries'.

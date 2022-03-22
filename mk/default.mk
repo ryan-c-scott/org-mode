@@ -26,16 +26,26 @@ infodir = $(prefix)/info
 # the branch when undefined.
 GIT_BRANCH =
 
-# Define if you want to include some (or all) files from contrib/lisp
-# just the filename please (no path prefix, no .el suffix), maybe with globbing
-#ORG_ADD_CONTRIB = ox-* # e.g. the contributed exporter
-
 # Where to create temporary files for the testsuite
 # respect TMPDIR if it is already defined in the environment
 TMPDIR ?= /tmp
 testdir = $(TMPDIR)/tmp-orgtest
 
 # Configuration for testing
+# Verbose ERT summary by default for Emacs-28 and above.
+# To override:
+# - Add to local.mk
+#   EMACS_TEST_VERBOSE =
+# - Export EMACS_TEST_VERBOSE environment variable with empty value
+# - Run tests as
+#   EMACS_TEST_VERBOSE= make test [OTHER_ARGUMENTS...]
+#   or as
+#   make test EMACS_TEST_VERBOSE= [OTHER_ARGUMENTS...]
+EMACS_TEST_VERBOSE ?= yes
+ifeq (,$(EMACS_TEST_VERBOSE))
+# Emacs-28 considers empty value as true, fixed in Emacs-29
+unexport EMACS_TEST_VERBOSE
+endif
 # add options before standard load-path
 BTEST_PRE   =
 # add options after standard load path
@@ -43,7 +53,7 @@ BTEST_POST  =
               # -L <path-to>/ert      # needed for Emacs23, Emacs24 has ert built in
               # -L <path-to>/ess      # needed for running R tests
               # -L <path-to>/htmlize  # need at least version 1.34 for source code formatting
-BTEST_OB_LANGUAGES = awk C fortran maxima lilypond octave perl python vala
+BTEST_OB_LANGUAGES = awk C fortran maxima lilypond octave perl python
               # R                     # requires ESS to be installed and configured
               # ruby                  # requires inf-ruby to be installed and configured
 # extra packages to require for testing
@@ -89,7 +99,7 @@ EMACSQ  = $(EMACS)  -Q
 
 # Using emacs in batch mode.
 BATCH	= $(EMACSQ) -batch \
-	  --eval '(setq vc-handled-backends nil org-startup-folded nil)'
+	  --eval '(setq vc-handled-backends nil org-startup-folded nil org-element-cache-persistent nil)'
 
 # Emacs must be started in toplevel directory
 BATCHO	= $(BATCH) \

@@ -1,9 +1,9 @@
 ;;; ox.el --- Export Framework for Org Mode          -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2012-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2022 Free Software Foundation, Inc.
 
-;; Author: Nicolas Goaziou <n.goaziou at gmail dot com>
-;; Maintainer: Nicolas Goaziou <n.goaziou at gmail dot com>
+;; Author: Nicolas Goaziou <mail@nicolasgoaziou.fr>
+;; Maintainer: Nicolas Goaziou <mail@nicolasgoaziou.fr>
 ;; Keywords: outlines, hypermedia, calendar, wp
 
 ;; This file is part of GNU Emacs.
@@ -75,7 +75,6 @@
 (require 'cl-lib)
 (require 'ob-exp)
 (require 'oc)
-(require 'oc-basic)    ;default value for `org-cite-export-processors'
 (require 'ol)
 (require 'org-element)
 (require 'org-macro)
@@ -260,6 +259,8 @@ rules.")
 
 (defconst org-export-ignored-local-variables
   '(org-font-lock-keywords
+    org-element--cache-change-tic org-element--cache-change-tic org-element--cache-size
+    org-element--cache-sync-keys-value org-element--cache-change-warning
     org-element--cache org-element--cache-objects org-element--cache-sync-keys
     org-element--cache-sync-requests org-element--cache-sync-timer)
   "List of variables not copied through upon buffer duplication.
@@ -299,7 +300,7 @@ and its CDR is a list of export options.")
 
 (defvar org-export-dispatch-last-position (make-marker)
   "The position where the last export command was created using the dispatcher.
-This marker will be used with `C-u C-c C-e' to make sure export repetition
+This marker will be used with `\\[universal-argument] C-c C-e' to make sure export repetition
 uses the same subtree if the previous command was restricted to a subtree.")
 
 ;; For compatibility with Org < 8
@@ -632,7 +633,7 @@ This option can also be set with the SELECT_TAGS keyword."
 (defcustom org-export-with-smart-quotes nil
   "Non-nil means activate smart quotes during export.
 This option can also be set with the OPTIONS keyword,
-e.g., \"':t\".
+e.g., \"\\=':t\".
 
 When setting this to non-nil, you need to take care of
 using the correct Babel package when exporting to LaTeX.
@@ -1048,6 +1049,7 @@ BACKEND is a structure with `org-export-backend' type."
   (unless (org-export-backend-p backend)
     (error "Unknown \"%s\" back-end: Aborting export" backend)))
 
+;;;###autoload
 (defun org-export-derived-backend-p (backend &rest backends)
   "Non-nil if BACKEND is derived from one of BACKENDS.
 BACKEND is an export back-end, as returned by, e.g.,
@@ -1858,6 +1860,7 @@ INFO is a plist containing export directives."
       (let ((transcoder (cdr (assq type (plist-get info :translate-alist)))))
 	(and (functionp transcoder) transcoder)))))
 
+;;;###autoload
 (defun org-export-data (data info)
   "Convert DATA into current back-end format.
 
@@ -2614,6 +2617,9 @@ The function assumes BUFFER's major mode is `org-mode'."
 	    (set (make-local-variable var) val))
 	  ;; Whole buffer contents.
 	  (insert str)
+          ;; Make org-element-cache not complain about changed buffer
+          ;; state.
+          (org-element-cache-reset)
 	  ;; Narrowing.
 	  (apply #'narrow-to-region narrowing)
 	  ;; Current position of point.
@@ -2726,8 +2732,8 @@ a list of footnote definitions or in the widened buffer."
 	  ) ;; seen
       (dolist (l (funcall list-labels tree))
 	(cond ;; ((member l seen))
-	      ((member l known-definitions) (push l defined))
-	      (t (push l undefined)))))
+	 ((member l known-definitions) (push l defined))
+	 (t (push l undefined)))))
     ;; Complete MISSING-DEFINITIONS by finding the definition of every
     ;; undefined label, first by looking into DEFINITIONS, then by
     ;; searching the widened buffer.  This is a recursive process
@@ -2739,7 +2745,7 @@ a list of footnote definitions or in the widened buffer."
 	       (cond
 		((cl-some
 		  (lambda (d) (and (equal (org-element-property :label d) label)
-			      d))
+			           d))
 		  definitions))
 		((pcase (org-footnote-get-definition label)
 		   (`(,_ ,beg . ,_)
@@ -2802,16 +2808,16 @@ containing their first reference."
    ;; the definitions at the end of the tree.
    (org-footnote-section
     (org-element-adopt-elements
-     tree
-     (org-element-create 'headline
-			 (list :footnote-section-p t
-			       :level 1
-			       :title org-footnote-section
-			       :raw-value org-footnote-section)
-			 (apply #'org-element-create
-				'section
-				nil
-				(nreverse definitions)))))
+        tree
+      (org-element-create 'headline
+			  (list :footnote-section-p t
+			        :level 1
+			        :title org-footnote-section
+			        :raw-value org-footnote-section)
+			  (apply #'org-element-create
+				 'section
+				 nil
+				 (nreverse definitions)))))
    ;; Otherwise add each definition at the end of the section where it
    ;; is first referenced.
    (t
@@ -2834,8 +2840,8 @@ containing their first reference."
 					  d))
 				   definitions)))
 			    (org-element-adopt-elements
-			     (org-element-lineage reference '(section))
-			     definition)
+			        (org-element-lineage reference '(section))
+			      definition)
 			    ;; Also insert definitions for nested
 			    ;; references, if any.
 			    (funcall insert-definitions definition))))))))))
@@ -4222,10 +4228,10 @@ Return modified DATA."
 			     (or rules org-export-default-inline-image-rule))
 		;; Replace contents with image link.
 		(org-element-adopt-elements
-		 (org-element-set-contents l nil)
-		 (with-temp-buffer
-		   (save-excursion (insert contents))
-		   (org-element-link-parser))))))))
+		    (org-element-set-contents l nil)
+		  (with-temp-buffer
+		    (save-excursion (insert contents))
+		    (org-element-link-parser))))))))
       info nil nil t))
   data)
 
@@ -4440,6 +4446,49 @@ Return value can be an object or an element:
 	   (concat (if (string-prefix-p "/" fullname) "file://" "file:///")
 		   fullname)))))
 
+(defun org-export-link-remote-p (link)
+  "Returns non-nil if the link refers to a remote resource."
+  (or (member (org-element-property :type link) '("http" "https" "ftp"))
+      (and (string= (org-element-property :type link) "file")
+           (file-remote-p (org-element-property :path link)))))
+
+(defun org-export-link--remote-local-copy (link)
+  "Download the remote resource specified by LINK, and return its local path."
+  ;; TODO work this into ol.el as a link parameter, say :download.
+  (let* ((location-type
+          (pcase (org-element-property :type link)
+            ((or "http" "https" "ftp") 'url)
+            ((and "file" (guard (file-remote-p
+                                 (org-element-property :path link))))
+             'file)
+            (_ (error "Cannot copy %s:%s to a local file"
+                      (org-element-property :type link)
+                      (org-element-property :path link)))))
+         (path
+          (pcase location-type
+            ('url
+             (concat (org-element-property :type link)
+                     ":" (org-element-property :path link)))
+            ('file
+             (org-element-property :path link)))))
+    (or (org-persist-read location-type path)
+        (org-persist-register location-type path
+                              :write-immediately t))))
+
+(defun org-export-link-localise (link)
+  "Convert remote LINK to local link.
+If LINK refers to a remote resource, modify it to point to a local
+downloaded copy.  Otherwise, return unchanged LINK."
+  (when (org-export-link-remote-p link)
+    (let* ((local-path (org-export-link--remote-local-copy link)))
+      (setcdr link
+              (thread-first (cadr link)
+                            (plist-put :type "file")
+                            (plist-put :path local-path)
+                            (plist-put :raw-link (concat "file:" local-path))
+                            list))))
+  link)
+
 ;;;; For References
 ;;
 ;; `org-export-get-reference' associate a unique reference for any
@@ -4586,6 +4635,7 @@ objects of the same type."
 ;; `org-export-raw-string' builds a pseudo-object out of a string
 ;; that any export back-end returns as-is.
 
+;;;###autoload
 (defun org-export-raw-string (s)
   "Return a raw object containing string S.
 A raw string is exported as-is, with no additional processing
@@ -5121,8 +5171,8 @@ INFO is a plist used as a communication channel."
   ;; A cell ends a column group either when it is at the end of a row
   ;; or when it has a right border.
   (or (eq (car (last (org-element-contents
-			 (org-export-get-parent table-cell))))
-	     table-cell)
+		      (org-export-get-parent table-cell))))
+	  table-cell)
       (memq 'right (org-export-table-cell-borders table-cell info))))
 
 (defun org-export-table-row-starts-rowgroup-p (table-row info)
@@ -5436,6 +5486,16 @@ transcoding it."
       :utf-8 "‚" :html "&sbquo;" :latex "\\glq{}" :texinfo "@quotesinglbase{}")
      (secondary-closing
       :utf-8 "‘" :html "&lsquo;" :latex "\\grq{}" :texinfo "@quoteleft{}")
+     (apostrophe :utf-8 "’" :html "&rsquo;"))
+    ("el"
+     (primary-opening
+      :utf-8 "«" :html "&laquo;" :latex "\\guillemotleft{}"
+      :texinfo "@guillemetleft{}")
+     (primary-closing
+      :utf-8 "»" :html "&raquo;" :latex "\\guillemotright{}"
+      :texinfo "@guillemetright{}")
+     (secondary-opening :utf-8 "“" :html "&ldquo;" :latex "``" :texinfo "``")
+     (secondary-closing :utf-8 "”" :html "&rdquo;" :latex "''" :texinfo "''")
      (apostrophe :utf-8 "’" :html "&rsquo;"))
     ("en"
      (primary-opening :utf-8 "“" :html "&ldquo;" :latex "``" :texinfo "``")
@@ -6329,9 +6389,9 @@ and `org-export-to-file' for more specialized functions."
 
 ;;;###autoload
 (defun org-export-to-buffer
-  (backend buffer
-	   &optional async subtreep visible-only body-only ext-plist
-	   post-process)
+    (backend buffer
+	     &optional async subtreep visible-only body-only ext-plist
+	     post-process)
   "Call `org-export-as' with output to a specified buffer.
 
 BACKEND is either an export back-end, as returned by, e.g.,
@@ -6360,7 +6420,11 @@ use it to set a major mode there, e.g,
     (&optional async subtreep visible-only body-only ext-plist)
     (interactive)
     (org-export-to-buffer \\='latex \"*Org LATEX Export*\"
-      async subtreep visible-only body-only ext-plist (lambda () (LaTeX-mode))))
+      async subtreep visible-only body-only ext-plist
+      #'LaTeX-mode))
+
+When expressed as an anonymous function, using `lambda',
+POST-PROCESS needs to be quoted.
 
 This function returns BUFFER."
   (declare (indent 2))
@@ -6395,8 +6459,8 @@ This function returns BUFFER."
 
 ;;;###autoload
 (defun org-export-to-file
-  (backend file &optional async subtreep visible-only body-only ext-plist
-	   post-process)
+    (backend file &optional async subtreep visible-only body-only ext-plist
+	     post-process)
   "Call `org-export-as' with output to a specified file.
 
 BACKEND is either an export back-end, as returned by, e.g.,
@@ -6423,7 +6487,10 @@ to send the output file through additional processing, e.g,
     (let ((outfile (org-export-output-file-name \".tex\" subtreep)))
       (org-export-to-file \\='latex outfile
         async subtreep visible-only body-only ext-plist
-        (lambda (file) (org-latex-compile file)))
+        #'org-latex-compile)))
+
+When expressed as an anonymous function, using `lambda',
+POST-PROCESS needs to be quoted.
 
 The function returns either a file name returned by POST-PROCESS,
 or FILE."
@@ -6553,7 +6620,7 @@ If optional argument SOURCE is non-nil, remove it instead."
   (let ((source (or source (org-export--stack-source-at-point))))
     (setq org-export-stack-contents
 	  (cl-remove-if (lambda (el) (equal (car el) source))
-			 org-export-stack-contents))))
+			org-export-stack-contents))))
 
 (defun org-export-stack-view (&optional in-emacs)
   "View export results at point in stack.

@@ -1,6 +1,6 @@
 ;;; org-clock.el --- The time clocking code for Org mode -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -35,6 +35,8 @@
 (declare-function notifications-notify "notifications" (&rest params))
 (declare-function org-element-property "org-element" (property element))
 (declare-function org-element-type "org-element" (element))
+(declare-function org-element--cache-active-p "org-element" ())
+(defvar org-element-use-cache)
 (declare-function org-inlinetask-at-task-p "org-inlinetask" ())
 (declare-function org-inlinetask-goto-beginning "org-inlinetask" ())
 (declare-function org-inlinetask-goto-end "org-inlinetask" ())
@@ -85,7 +87,7 @@ function `org-clock-into-drawer' instead."
 	  (string :tag "Into Drawer named...")))
 
 (defun org-clock-into-drawer ()
-  "Value of `org-clock-into-drawer'. but let properties overrule.
+  "Value of `org-clock-into-drawer', but let properties overrule.
 
 If the current entry has or inherits a CLOCK_INTO_DRAWER
 property, it will be used instead of the default value.
@@ -513,9 +515,9 @@ to add an effort property.")
   "Has the clock been used during the current Emacs session?")
 
 (defvar org-clock-stored-history nil
-  "Clock history, populated by `org-clock-load'")
+  "Clock history, populated by `org-clock-load'.")
 (defvar org-clock-stored-resume-clock nil
-  "Clock to resume, saved by `org-clock-load'")
+  "Clock to resume, saved by `org-clock-load'.")
 
 ;;; The clock for measuring work time.
 
@@ -683,19 +685,19 @@ pointing to it."
     (let (cat task heading prefix)
       (with-current-buffer (org-base-buffer (marker-buffer marker))
 	(org-with-wide-buffer
-	  (ignore-errors
-	    (goto-char marker)
-	    (setq cat (org-get-category)
-		  heading (org-get-heading 'notags)
-		  prefix (save-excursion
-			   (org-back-to-heading t)
-			   (looking-at org-outline-regexp)
-			   (match-string 0))
-		  task (substring
-			(org-fontify-like-in-org-mode
-			 (concat prefix heading)
-			 org-odd-levels-only)
-			(length prefix))))))
+	 (ignore-errors
+	   (goto-char marker)
+	   (setq cat (org-get-category)
+		 heading (org-get-heading 'notags)
+		 prefix (save-excursion
+			  (org-back-to-heading t)
+			  (looking-at org-outline-regexp)
+			  (match-string 0))
+		 task (substring
+		       (org-fontify-like-in-org-mode
+			(concat prefix heading)
+			org-odd-levels-only)
+		       (length prefix))))))
       (when (and cat task)
 	(insert (format "[%c] %-12s  %s\n" i cat task))
 	(cons i marker)))))
@@ -770,7 +772,7 @@ The time returned includes the time spent on this task in
 previous clocking intervals."
   (let ((currently-clocked-time
 	 (floor (org-time-convert-to-integer
-		 (org-time-since org-clock-start-time))
+		 (time-since org-clock-start-time))
 		60)))
     (+ currently-clocked-time (or org-clock-total-time 0))))
 
@@ -859,6 +861,10 @@ use libnotify if available, or fall back on a message."
 	    org-show-notification-timeout
 	    nil
 	    (lambda () (w32-notification-close id)))))
+        ((fboundp 'ns-do-applescript)
+         (ns-do-applescript
+          (format "display notification \"%s\" with title \"Org mode notification\""
+                  (replace-regexp-in-string "\"" "#" notification))))
 	((fboundp 'notifications-notify)
 	 (notifications-notify
 	  :title "Org mode message"
@@ -996,7 +1002,7 @@ CLOCK is a cons cell of the form (MARKER START-TIME)."
 	 (org-clock-clock-out clock fail-quietly))
 	((org-is-active-clock clock) nil)
 	(t (org-clock-clock-in clock t))))
-      ((pred (org-time-less-p nil))
+      ((pred (time-less-p nil))
        (error "RESOLVE-TO must refer to a time in the past"))
       (_
        (when restart (error "RESTART is not valid here"))
@@ -1098,7 +1104,7 @@ to be CLOCKED OUT."))))
 				   nil 45)))
 		(and (not (memq char-pressed '(?i ?q))) char-pressed)))))
 	 (default
-	   (floor (org-time-convert-to-integer (org-time-since last-valid))
+	   (floor (org-time-convert-to-integer (time-since last-valid))
 		  60))
 	 (keep
 	  (or (and (memq ch '(?k ?K))
@@ -1106,14 +1112,14 @@ to be CLOCKED OUT."))))
 	      (and (memq ch '(?t ?T))
 		   (floor
 		    (/ (float-time
-			(org-time-subtract (org-read-date t t) last-valid))
+			(time-subtract (org-read-date t t) last-valid))
 		       60)))))
 	 (gotback
 	  (and (memq ch '(?g ?G))
 	       (read-number "Got back how many minutes ago? " default)))
 	 (subtractp (memq ch '(?s ?S)))
-	 (barely-started-p (org-time-less-p
-			    (org-time-subtract last-valid (cdr clock))
+	 (barely-started-p (time-less-p
+			    (time-subtract last-valid (cdr clock))
 			    45))
 	 (start-over (and subtractp barely-started-p)))
     (cond
@@ -1140,9 +1146,9 @@ to be CLOCKED OUT."))))
 		   (and gotback (= gotback default)))
 	       'now)
 	      (keep
-	       (org-time-add last-valid (* 60 keep)))
+	       (time-add last-valid (* 60 keep)))
 	      (gotback
-	       (org-time-since (* 60 gotback)))
+	       (time-since (* 60 gotback)))
 	      (t
 	       (error "Unexpected, please report this as a bug")))
        (and gotback last-valid)
@@ -1172,7 +1178,7 @@ If `only-dangling-p' is non-nil, only ask to resolve dangling
 			 (format
 			  "Dangling clock started %d mins ago"
 			  (floor (org-time-convert-to-integer
-				  (org-time-since (cdr clock)))
+				  (time-since (cdr clock)))
 				 60))))
 		   (or last-valid
 		       (cdr clock)))))))))))
@@ -1223,7 +1229,7 @@ so long."
 	     org-clock-marker (marker-buffer org-clock-marker))
     (let* ((org-clock-user-idle-seconds (org-user-idle-seconds))
 	   (org-clock-user-idle-start
-	    (org-time-since org-clock-user-idle-seconds))
+	    (time-since org-clock-user-idle-seconds))
 	   (org-clock-resolving-clocks-due-to-idleness t))
       (if (> org-clock-user-idle-seconds (* 60 org-clock-idle-time))
 	  (org-clock-resolve
@@ -1261,7 +1267,8 @@ time as the start time.  See `org-clock-continuously' to make this
 the default behavior."
   (interactive "P")
   (setq org-clock-notification-was-shown nil)
-  (org-refresh-effort-properties)
+  (unless org-element-use-cache
+    (org-refresh-effort-properties))
   (catch 'abort
     (let ((interrupting (and (not org-clock-resolving-clocks-due-to-idleness)
 			     (org-clocking-p)))
@@ -1384,7 +1391,7 @@ the default behavior."
 			   (format
 			    "You stopped another clock %d mins ago; start this one from then? "
 			    (/ (org-time-convert-to-integer
-				(org-time-subtract
+				(time-subtract
 				 (org-current-time org-clock-rounding-minutes t)
 				 leftover))
 			       60)))
@@ -1743,7 +1750,7 @@ Optional argument N tells to change by that many units."
   (org-clock-timestamps-change 'up n))
 
 (defun org-clock-timestamps-down (&optional n)
-  "Increase CLOCK timestamps at cursor.
+  "Decrease CLOCK timestamps at cursor.
 Optional argument N tells to change by that many units."
   (interactive "P")
   (org-clock-timestamps-change 'down n))
@@ -1924,7 +1931,7 @@ PROPNAME lets you set a custom text property instead of :org-clock-minutes."
 		       (>= (float-time org-clock-start-time) tstart)
 		       (<= (float-time org-clock-start-time) tend))
 	      (let ((time (floor (org-time-convert-to-integer
-				  (org-time-since org-clock-start-time))
+				  (time-since org-clock-start-time))
 				 60)))
 		(setq t1 (+ t1 time))))
 	    (let* ((headline-forced
@@ -2502,7 +2509,7 @@ the currently selected interval size."
       (when step
 	;; Write many tables, in steps
 	(unless (or block (and ts te))
-	  (user-error "Clocktable `:step' can only be used with `:block' or `:tstart, :end'"))
+	  (user-error "Clocktable `:step' can only be used with `:block' or `:tstart', `:tend'"))
 	(org-clocktable-steps params)
 	(throw 'exit nil))
 
@@ -2752,13 +2759,13 @@ from the dynamic block definition."
 		 (if timestamp (concat ts "|") "")   ;timestamp, maybe
 		 (if tags (concat (mapconcat #'identity tgs ", ") "|") "")   ;tags, maybe
 		 (if properties		;properties columns, maybe
-		     (concat (mapconcat (lambda (p) (or (cdr (assoc p props)) ""))
-					properties
-					"|")
-			     "|")
+		   (concat (mapconcat (lambda (p) (or (cdr (assoc p props)) ""))
+				      properties
+				      "|")
+			   "|")
 		   "")
 		 (if indent		;indentation
-		     (org-clocktable-indent-string level)
+		   (org-clocktable-indent-string level)
 		   "")
 		 (format-field headline)
 		 ;; Empty fields for higher levels.
@@ -2766,7 +2773,7 @@ from the dynamic block definition."
 		 (format-field (org-duration-from-minutes time))
 		 (make-string (max 0 (- time-columns level)) ?|)
 		 (if (eq formula '%)
-		     (format "%.1f |" (* 100 (/ time (float total-time))))
+		   (format "%.1f |" (* 100 (/ time (float total-time))))
 		   "")
 		 "\n")))))))
     (delete-char -1)

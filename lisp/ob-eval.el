@@ -1,6 +1,6 @@
 ;;; ob-eval.el --- Babel Functions for External Code Evaluation -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research, comint
@@ -44,7 +44,7 @@
 (defun org-babel-eval (command query)
   "Run COMMAND on QUERY.
 Writes QUERY into a temp-buffer that is processed with
-org-babel--shell-command-on-region.  If COMMAND succeeds then return
+`org-babel--shell-command-on-region'.  If COMMAND succeeds then return
 its results, otherwise display STDERR with
 `org-babel-eval-error-notify'."
   (let ((error-buffer (get-buffer-create " *Org-Babel Error*")) exit-code)

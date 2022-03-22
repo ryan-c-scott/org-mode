@@ -413,6 +413,10 @@
   ;; The function ignores incomplete drawers.
   (should-not
    (org-test-with-temp-text ":PROPERTIES:\n<point>:PROP: t\n"
+                            (org-at-property-drawer-p)))
+  ;; tab separating the value.
+  (should
+   (org-test-with-temp-text ":PROPERTIES:\n:PROP:	t\n:END:\n"
      (org-at-property-drawer-p))))
 
 (ert-deftest test-org/get-property-block ()
@@ -1164,6 +1168,13 @@
 		  (org-adapt-indentation nil))
 	      (org-indent-region (point) (point-max)))
 	    (buffer-string))))
+  ;; Indent property drawers according to `org-adapt-indentation'.
+  (let ((org-adapt-indentation 'headline-data))
+    (should
+     (equal "* H\n  :PROPERTIES:\n  :key:\n  :END:"
+            (org-test-with-temp-text "* H\n:PROPERTIES:\n:key:\n:END:"
+              (org-indent-region (point-min) (point-max))
+              (buffer-string)))))
   ;; Indent plain lists.
   (let ((org-adapt-indentation t))
     (should
@@ -1602,6 +1613,21 @@
   ;; When called with one universal argument, insert a new headline at
   ;; the end of the current subtree, independently on the position of
   ;; point.
+  (should
+   (equal
+    "* "
+    (org-test-with-temp-text ""
+      (let ((org-insert-heading-respect-content nil))
+	(org-insert-heading '(4)))
+      (buffer-string))))
+  (should
+   (equal
+    "entry
+* "
+    (org-test-with-temp-text "entry"
+      (let ((org-insert-heading-respect-content nil))
+	(org-insert-heading '(4)))
+      (buffer-string))))
   (should
    (equal
     "* H1\n** H2\n* "
@@ -2379,7 +2405,29 @@ SCHEDULED: <2014-03-04 tue.>"
    (equal '(22)
 	  (org-test-with-temp-text "* H1 :yes:\n* H2 :no:\n* H3 :yes:no:"
 	    (let (org-odd-levels-only)
-	      (org-map-entries #'point "yes&no"))))))
+	      (org-map-entries #'point "yes&no")))))
+  ;; Setting `org-map-continue-from'
+  (should
+   (string= ""
+            (org-test-with-temp-text "* H1\n* H2\n* H3n* H4"
+              (org-map-entries
+               (lambda ()
+                 (org-cut-subtree)
+                 (setq org-map-continue-from (point))))
+              (buffer-string))))
+  (should
+   (string= "* H1\n* H2\n* H3\n"
+            (org-test-with-temp-text "* H1\n* H2\n* H3\n* H4"
+              (org-map-entries
+               (lambda ()
+                 (when (string= "H4"
+                                (org-element-property
+                                 :raw-value (org-element-at-point)))
+                   (org-cut-subtree)
+                   (setq org-map-continue-from
+                         (org-element-property
+                          :begin (org-element-at-point))))))
+              (buffer-string)))))
 
 (ert-deftest test-org/edit-headline ()
   "Test `org-edit-headline' specifications."
@@ -2629,6 +2677,11 @@ SCHEDULED: <2014-03-04 tue.>"
 	    (org-mode-restart)
 	    (cdr (assoc "a" org-keyword-properties))))))
 
+(ert-deftest test-org/collect-keywords ()
+  "Test `org-collect-keywords'."
+  (should-not
+   (org-test-with-temp-text "#+begin_example\n#+foo: bar\n#+end_example"
+     (org-collect-keywords '("FOO")))))
 
 
 ;;; Links
@@ -5816,6 +5869,10 @@ Paragraph<point>"
    (org-test-with-temp-text "* H\n:PROPERTIES:\n:A: 1\n:END:\n** H2"
      (let ((org-use-property-inheritance nil))
        (org-entry-get (point-max) "A" 'selective))))
+  (should-not
+   (org-test-with-temp-text "* H\n:PROPERTIES:\n:A: 1\n:END:\n* H2"
+     (let ((org-use-property-inheritance t))
+       (org-entry-get (point-max) "A" t))))
   (should
    (equal
     "1 2"
@@ -5838,7 +5895,7 @@ Paragraph<point>"
    (equal
     "1 2"
     (org-test-with-temp-text
-	"* H1\n:PROPERTIES:\n:A: 1\n:END:\n* H2.1\n* H2.2\n:PROPERTIES:\n:A+: 2\n:END:"
+	"* H1\n:PROPERTIES:\n:A: 1\n:END:\n** H2.1\n** H2.2\n:PROPERTIES:\n:A+: 2\n:END:"
       (org-entry-get (point-max) "A" t))))
   (should
    (equal "1"
@@ -6260,13 +6317,13 @@ Paragraph<point>"
 	  (org-test-with-temp-text
 	      ":PROPERTIES:\n:CATEGORY: cat1\n:END:"
 	    (org-refresh-category-properties)
-	    (get-text-property (point) 'org-category))))
+            (org-get-category))))
   (should
    (equal "cat1"
 	  (org-test-with-temp-text
 	      "* H\n:PROPERTIES:\n:CATEGORY: cat1\n:END:"
 	    (org-refresh-category-properties)
-	    (get-text-property (point) 'org-category))))
+	    (org-get-category))))
   ;; Even though property-inheritance is deactivated, category
   ;; property should be inherited.  As described in
   ;; `org-use-property-inheritance'.
@@ -6277,7 +6334,7 @@ Paragraph<point>"
 	    (org-mode-restart)
 	    (let ((org-use-property-inheritance nil))
 	      (org-refresh-category-properties))
-	    (get-text-property (point) 'org-category))))
+	    (org-get-category))))
   (should
    (equal "cat1"
 	  (org-test-with-temp-text
@@ -6285,7 +6342,7 @@ Paragraph<point>"
 	    (org-mode-restart)
 	    (let ((org-use-property-inheritance t))
 	      (org-refresh-category-properties))
-	    (get-text-property (point) 'org-category))))
+	    (org-get-category))))
   (should
    (equal "cat2"
 	  (org-test-with-temp-text
@@ -6293,7 +6350,7 @@ Paragraph<point>"
 	    (org-mode-restart)
 	    (let ((org-use-property-inheritance t))
 	      (org-refresh-category-properties))
-	    (get-text-property (point) 'org-category)))))
+	    (org-get-category)))))
 
 
 ;;; Refile
@@ -6757,6 +6814,19 @@ Paragraph<point>"
   (should
    (equal '("foo" "bar")
 	  (org-test-with-temp-text "* Test :foo:bar:" (org-get-tags))))
+  ;; Tags for inlinetasks.
+  (should
+   (equal '("foo" "bar")
+          (progn
+            (require 'org-inlinetask)
+            (org-test-with-temp-text (concat (make-string org-inlinetask-min-level ?*) " Test :foo:bar:")
+              (org-get-tags (org-element-at-point))))))
+  (should
+   (equal '("foo" "bar")
+          (progn
+            (require 'org-inlinetask)
+            (org-test-with-temp-text (concat (make-string org-inlinetask-min-level ?*) " Test :foo:bar:")
+              (org-get-tags nil)))))
   ;; Return nil when there is no tag.
   (should-not
    (org-test-with-temp-text "* Test" (org-get-tags)))
@@ -7396,7 +7466,154 @@ Paragraph<point>"
 SCHEDULED: <2012-03-29 Thu +2y>
 CLOCK: [2012-03-29 Thu 10:00]--[2012-03-29 Thu 16:40] =>  6:40"
 	(org-todo "DONE")
-	(buffer-string))))))
+	(buffer-string)))))
+  ;; Make sure that logbook state change record does not get
+  ;; duplicated when `org-log-repeat' `org-log-done' are non-nil.
+  (should
+   (string-match-p
+    (rx "* TODO Read book
+SCHEDULED: <2021-06-16 " (1+ (not space)) " +1d>
+:PROPERTIES:
+:LAST_REPEAT:" (1+ nonl) "
+:END:
+- State \"DONE\"       from \"TODO\"" (1+ nonl) buffer-end)
+    (let ((org-log-repeat 'time)
+	  (org-todo-keywords '((sequence "TODO" "|" "DONE(d!)")))
+          (org-log-into-drawer nil))
+      (org-test-with-temp-text
+          "* TODO Read book
+SCHEDULED: <2021-06-15 Tue +1d>"
+        (org-todo "DONE")
+        (when (memq 'org-add-log-note post-command-hook)
+          (org-add-log-note))
+        (buffer-string))))))
+
+(ert-deftest test-org/org-log-done ()
+  "Test `org-log-done' specifications."
+  ;; nil value.
+  (should
+   (string=
+    "* DONE task"
+    (let ((org-log-done nil)
+          (org-todo-keywords '((sequence "TODO" "DONE"))))
+      (org-test-with-temp-text
+          "* TODO task"
+        (org-todo "DONE")
+        (when (memq 'org-add-log-note post-command-hook)
+          (org-add-log-note))
+        (buffer-string)))))
+  ;; `time' value.
+  (should
+   (string=
+    (format
+    "* DONE task
+CLOSED: %s"
+    (org-test-with-temp-text ""
+      (org-insert-time-stamp (current-time) t t)
+      (buffer-string)))
+    (let ((org-log-done 'time)
+          (org-log-done-with-time t)
+          (org-todo-keywords '((sequence "TODO" "DONE"))))
+      (org-test-with-temp-text
+          "* TODO task"
+        (org-todo "DONE")
+        (when (memq 'org-add-log-note post-command-hook)
+          (org-add-log-note))
+        (buffer-string)))))
+  (should
+   (string=
+    (format
+    "* DONE task
+CLOSED: %s"
+    (org-test-with-temp-text ""
+      (org-insert-time-stamp (current-time) nil t)
+      (buffer-string)))
+    (let ((org-log-done 'time)
+          (org-log-done-with-time nil)
+          (org-todo-keywords '((sequence "TODO" "DONE"))))
+      (org-test-with-temp-text
+          "* TODO task"
+        (org-todo "DONE")
+        (when (memq 'org-add-log-note post-command-hook)
+          (org-add-log-note))
+        (buffer-string)))))
+  ;; TODO: Test `note' value.
+  ;; Test startup overrides.
+  (should
+   (string=
+    "#+STARTUP: nologdone
+* DONE task"
+    (let ((org-log-done 'time)
+          (org-todo-keywords '((sequence "TODO" "DONE"))))
+      (org-test-with-temp-text
+          "#+STARTUP: nologdone
+<point>* TODO task"
+        (org-set-regexps-and-options)
+        (org-todo "DONE")
+        (when (memq 'org-add-log-note post-command-hook)
+          (org-add-log-note))
+        (buffer-string)))))
+  (should
+   (string=
+    (format
+    "#+STARTUP: logdone
+* DONE task
+CLOSED: %s"
+    (org-test-with-temp-text ""
+      (org-insert-time-stamp (current-time) t t)
+      (buffer-string)))
+    (let ((org-log-done nil)
+          (org-log-done-with-time t)
+          (org-todo-keywords '((sequence "TODO" "DONE"))))
+      (org-test-with-temp-text
+          "#+STARTUP: logdone
+<point>* TODO task"
+        (org-set-regexps-and-options)
+        (org-todo "DONE")
+        (when (memq 'org-add-log-note post-command-hook)
+          (org-add-log-note))
+        (buffer-string)))))
+  ;; Test local property overrides.
+  (should
+   (string=
+    "* DONE task
+:PROPERTIES:
+:LOGGING: nil
+:END:"
+    (let ((org-log-done 'time)
+          (org-todo-keywords '((sequence "TODO" "DONE"))))
+      (org-test-with-temp-text
+          "* TODO task
+:PROPERTIES:
+:LOGGING: nil
+:END:"
+        (org-todo "DONE")
+        (when (memq 'org-add-log-note post-command-hook)
+          (org-add-log-note))
+        (buffer-string)))))
+  (should
+   (string=
+    (format
+    "* DONE task
+CLOSED: %s
+:PROPERTIES:
+:LOGGING: logdone
+:END:"
+    (org-test-with-temp-text ""
+      (org-insert-time-stamp (current-time) t t)
+      (buffer-string)))
+    (let ((org-log-done nil)
+          (org-log-done-with-time t)
+          (org-todo-keywords '((sequence "TODO" "DONE"))))
+      (org-test-with-temp-text
+          "* TODO task
+:PROPERTIES:
+:LOGGING: logdone
+:END:"
+        (org-todo "DONE")
+        (when (memq 'org-add-log-note post-command-hook)
+          (org-add-log-note))
+        (buffer-string))))))
 
 
 ;;; Timestamps API
@@ -8014,52 +8231,75 @@ CLOCK: [2012-03-29 Thu 10:00]--[2012-03-29 Thu 16:40] =>  6:40"
      (org-show-set-visibility 'minimal)
      (org-invisible-p2))))
 
-(defun test-org/copy-visible ()
+(ert-deftest test-org/copy-visible ()
   "Test `org-copy-visible' specifications."
-  (should
-   (equal "Foo"
-	  (org-test-with-temp-text "Foo"
-	    (let ((kill-ring nil))
-	      (org-copy-visible (point-min) (point-max))
-	      (current-kill 0 t)))))
-  ;; Skip invisible characters by text property.
-  (should
-   (equal "Foo"
-	  (org-test-with-temp-text #("F<hidden>oo" 1 7 (invisible t))
-	    (let ((kill-ring nil))
-	      (org-copy-visible (point-min) (point-max))
-	      (current-kill 0 t)))))
-  ;; Skip invisible characters by overlay.
-  (should
-   (equal "Foo"
-	  (org-test-with-temp-text "F<hidden>oo"
-	    (let ((o (make-overlay 2 10)))
-	      (overlay-put o 'invisible t))
-	    (let ((kill-ring nil))
-	      (org-copy-visible (point-min) (point-max))
-	      (current-kill 0 t)))))
-  ;; Handle invisible characters at the beginning and the end of the
-  ;; buffer.
-  (should
-   (equal "Foo"
-	  (org-test-with-temp-text #("<hidden>Foo" 0 8 (invisible t))
-	    (let ((kill-ring nil))
-	      (org-copy-visible (point-min) (point-max))
-	      (current-kill 0 t)))))
-  (should
-   (equal "Foo"
-	  (org-test-with-temp-text #("Foo<hidden>" 3 11 (invisible t))
-	    (let ((kill-ring nil))
-	      (org-copy-visible (point-min) (point-max))
-	      (current-kill 0 t)))))
-  ;; Handle multiple visible parts.
-  (should
-   (equal "abc"
-	  (org-test-with-temp-text
-	      #("aXbXc" 1 2 (invisible t) 3 4 (invisible t))
-	    (let ((kill-ring nil))
-	      (org-copy-visible (point-min) (point-max))
-	      (current-kill 0 t))))))
+  ;;`org-unfontify-region', which is wired up to
+  ;; `font-lock-unfontify-region-function', removes the invisible text
+  ;; property, among other things.
+  (cl-letf (((symbol-function 'org-unfontify-region) #'ignore))
+    (should
+     (equal "Foo"
+	    (org-test-with-temp-text "Foo"
+	      (let ((kill-ring nil))
+	        (org-copy-visible (point-min) (point-max))
+	        (current-kill 0 t)))))
+    ;; Skip invisible characters by text property.
+    (should
+     (equal "Foo"
+	    (org-test-with-temp-text #("F<hidden>oo" 1 9 (invisible t))
+	      (let ((kill-ring nil))
+	        (org-copy-visible (point-min) (point-max))
+	        (current-kill 0 t)))))
+    ;; Skip invisible characters by overlay.
+    (should
+     (equal "Foo"
+	    (org-test-with-temp-text "F<hidden>oo"
+	      (let ((o (make-overlay 2 10)))
+	        (overlay-put o 'invisible t))
+	      (let ((kill-ring nil))
+	        (org-copy-visible (point-min) (point-max))
+	        (current-kill 0 t)))))
+    ;; Handle invisible characters at the beginning and the end of the
+    ;; buffer.
+    (should
+     (equal "Foo"
+	    (org-test-with-temp-text #("<hidden>Foo" 0 8 (invisible t))
+	      (let ((kill-ring nil))
+	        (org-copy-visible (point-min) (point-max))
+	        (current-kill 0 t)))))
+    (should
+     (equal "Foo"
+	    (org-test-with-temp-text #("Foo<hidden>" 3 11 (invisible t))
+	      (let ((kill-ring nil))
+	        (org-copy-visible (point-min) (point-max))
+	        (current-kill 0 t)))))
+    ;; Handle multiple visible parts.
+    (should
+     (equal "abc"
+	    (org-test-with-temp-text
+	        #("aXbXc" 1 2 (invisible t) 3 4 (invisible t))
+	      (let ((kill-ring nil))
+	        (org-copy-visible (point-min) (point-max))
+	        (current-kill 0 t)))))
+    ;; Handle adjacent invisible parts.
+    (should
+     (equal "ab"
+	    (org-test-with-temp-text
+	        #("aXXb" 1 2 (invisible t) 2 3 (invisible org-link))
+	      (let ((kill-ring nil))
+	        (org-copy-visible (point-min) (point-max))
+	        (current-kill 0 t)))))
+    ;; Copies text based on what's actually visible, as defined by
+    ;; `buffer-invisibility-spec'.
+    (should
+     (equal "aYb"
+	    (org-test-with-temp-text
+	        #("aXYb"
+                  1 2 (invisible t)
+                  2 3 (invisible org-test-copy-visible))
+	      (let ((kill-ring nil))
+	        (org-copy-visible (point-min) (point-max))
+	        (current-kill 0 t)))))))
 
 (ert-deftest test-org/set-visibility-according-to-property ()
   "Test `org-set-visibility-according-to-property' specifications."

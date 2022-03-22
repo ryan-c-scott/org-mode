@@ -1,6 +1,6 @@
 ;;; org-macro.el --- Macro Replacement Code for Org  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2013-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2022 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <n.goaziou@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -30,7 +30,7 @@
 ;; `org-macro-initialize-templates', which recursively calls
 ;; `org-macro--collect-macros' in order to read setup files.
 
-;; Argument in macros are separated with commas. Proper escaping rules
+;; Argument in macros are separated with commas.  Proper escaping rules
 ;; are implemented in `org-macro-escape-arguments' and arguments can
 ;; be extracted from a string with `org-macro-extract-arguments'.
 
@@ -51,10 +51,12 @@
 (require 'org-compat)
 
 (declare-function org-collect-keywords "org" (keywords &optional unique directory))
-(declare-function org-element-at-point "org-element" ())
+(declare-function org-element-at-point "org-element" (&optional pom cached-only))
 (declare-function org-element-context "org-element" (&optional element))
 (declare-function org-element-copy "org-element" (datum))
 (declare-function org-element-macro-parser "org-element" ())
+(declare-function org-element-keyword-parser "org-element" (limit affiliated))
+(declare-function org-element-put-property "org-element" (element property value))
 (declare-function org-element-parse-secondary-string "org-element" (string restriction &optional parent))
 (declare-function org-element-property "org-element" (property element))
 (declare-function org-element-restriction "org-element" (element))
@@ -125,7 +127,7 @@ previous one, unless VALUE is nil.  Return the updated list."
   "Collect macro definitions in current buffer and setup files.
 Return an alist containing all macro templates found."
   (let ((templates
-         `(("author" . ,(org-macro--find-keyword-value "AUTHOR"))
+         `(("author" . ,(org-macro--find-keyword-value "AUTHOR" t))
 	   ("email" . ,(org-macro--find-keyword-value "EMAIL"))
 	   ("title" . ,(org-macro--find-keyword-value "TITLE" t))
 	   ("date" . ,(org-macro--find-date)))))
@@ -173,7 +175,7 @@ a file, \"input-file\" and \"modification-time\"."
                              modtime))))))))
 	 ;; Install generic macros.
 	 '(("keyword" . (lambda (arg1 &rest _)
-                          (org-macro--find-keyword-value arg1)))
+                          (org-macro--find-keyword-value arg1 t)))
 	   ("n" . (lambda (&optional arg1 arg2 &rest _)
                     (org-macro--counter-increment arg1 arg2)))
            ("property" . (lambda (arg1 &optional arg2 &rest _)
@@ -239,6 +241,13 @@ a definition in TEMPLATES."
 		     (goto-char (match-beginning 0))
 		     (org-element-macro-parser))))))
 	   (when macro
+             ;; `:parent' property might change as we modify buffer.
+             ;; We do not care about it when checking for circular
+             ;; dependencies.  So, setting `:parent' to nil making sure
+             ;; that actual macro element (if org-element-cache is
+             ;; active) is unchanged.
+             (setq macro (cl-copy-list macro))
+             (org-element-put-property macro :parent nil)
 	     (let* ((key (org-element-property :key macro))
 		    (value (org-macro-expand macro templates))
 		    (begin (org-element-property :begin macro))
@@ -338,7 +347,7 @@ in the buffer."
 	  (result nil))
       (catch :exit
 	(while (re-search-forward regexp nil t)
-	  (let ((element (org-element-at-point)))
+	  (let ((element (org-with-point-at (match-beginning 0) (org-element-keyword-parser (line-end-position) (list (match-beginning 0))))))
 	    (when (eq 'keyword (org-element-type element))
 	      (let ((value (org-element-property :value element)))
 		(if (not collect) (throw :exit value)
@@ -368,7 +377,7 @@ Return value as a string."
 	    date)
 	(unwind-protect
 	    (progn
-	      (vc-call print-log file buf nil nil 1)
+	      (vc-call print-log (list file) buf nil nil 1)
 	      (with-current-buffer buf
 		(vc-exec-after
 		 (lambda ()

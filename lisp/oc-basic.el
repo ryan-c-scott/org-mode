@@ -1,21 +1,23 @@
 ;;; oc-basic.el --- basic back-end for citations  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2021 Free Software Foundation, Inc.
+;; Copyright (C) 2021-2022 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <mail@nicolasgoaziou.fr>
 
-;; This program is free software; you can redistribute it and/or modify
+;; This file is part of GNU Emacs.
+
+;; GNU Emacs is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation, either version 3 of the License, or
 ;; (at your option) any later version.
 
-;; This program is distributed in the hope that it will be useful,
+;; GNU Emacs is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -66,8 +68,8 @@
 
 (require 'bibtex)
 (require 'json)
+(require 'map)
 (require 'oc)
-(require 'org)
 (require 'seq)
 
 (declare-function org-open-at-point "org" (&optional arg))
@@ -87,42 +89,42 @@
   :group 'org-cite
   :package-version '(Org . "9.5")
   :type 'symbol
-  :safe t)
+  :safe #'symbolp)
 
 (defcustom org-cite-basic-author-year-separator ", "
   "String used to separate cites in an author-year configuration."
   :group 'org-cite
   :package-version '(Org . "9.5")
   :type 'string
-  :safe t)
+  :safe #'stringp)
 
 (defcustom org-cite-basic-max-key-distance 2
   "Maximum (Levenshtein) distance between a wrong key and its suggestions."
   :group 'org-cite
   :package-version '(Org . "9.5")
   :type 'integer
-  :safe t)
+  :safe #'integerp)
 
 (defcustom org-cite-basic-author-column-end 25
   "Column where author field ends in completion table, as an integer."
   :group 'org-cite
   :package-version '(Org . "9.5")
   :type 'integer
-  :safe t)
+  :safe #'integerp)
 
 (defcustom org-cite-basic-column-separator "  "
   "Column separator in completion table, as a string."
   :group 'org-cite
   :package-version '(Org . "9.5")
   :type 'string
-  :safe t)
+  :safe #'stringp)
 
 (defcustom org-cite-basic-mouse-over-key-face 'highlight
   "Face used when mouse is over a citation key."
   :group 'org-cite
   :package-version '(Org . "9.5")
   :type 'face
-  :safe t)
+  :safe #'facep)
 
 
 ;;; Internal variables
@@ -176,21 +178,29 @@ Return a hash table with citation references as keys and fields alist as values.
                                      " and ")))
                              ('issued
                               ;; Date are expressed as an array
-                              ;; (`date-parts') or a "string (`raw').
-                              ;; In both cases, extract the year and
-                              ;; associate it to `year' field, for
-                              ;; compatibility with BibTeX format.
+                              ;; (`date-parts') or a "string (`raw'
+                              ;; or `literal'). In both cases,
+                              ;; extract the year and associate it
+                              ;; to `year' field, for compatibility
+                              ;; with BibTeX format.
                               (let ((date (or (alist-get 'date-parts value)
+                                              (alist-get 'literal value)
                                               (alist-get 'raw value))))
                                 (cons 'year
                                       (cond
                                        ((consp date)
                                         (caar date))
                                        ((stringp date)
-                                        (car (split-string date "-")))
+                                        (replace-regexp-in-string
+                                          (rx
+                                            (minimal-match (zero-or-more anything))
+                                            (group-n 1 (repeat 4 digit))
+                                            (zero-or-more anything))
+                                          (rx (backref 1))
+                                          date))
                                        (t
                                         (error "Unknown CSL-JSON date format: %S"
-                                               date))))))
+                                               value))))))
                              (_
                               (cons field value))))
                          item)
@@ -308,6 +318,20 @@ non-nil."
         (org-export-raw-string value)
       value)))
 
+(defun org-cite-basic--shorten-names (names)
+  "Return a list of family names from a list of full NAMES.
+
+To better accomomodate corporate names, this will only shorten
+personal names of the form 'family, given'."
+  (when (stringp names)
+    (mapconcat
+     (lambda (name)
+       (if (eq 1 (length name))
+           (cdr (split-string name))
+         (car (split-string name ", "))))
+     (split-string names " and ")
+     ", ")))
+
 (defun org-cite-basic--number-to-suffix (n)
   "Compute suffix associated to number N.
 This is used for disambiguation."
@@ -324,15 +348,30 @@ This is used for disambiguation."
                         ((= n 27) (throw :complete (cons 0 (cons 0 result))))
                         (t nil))))))))
 
-(defun org-cite-basic--get-year (entry-or-key info)
+(defun org-cite-basic--get-author (entry-or-key &optional info raw)
+  "Return author associated to ENTRY-OR-KEY.
+
+ENTRY-OR-KEY, INFO and RAW arguments are the same arguments as
+used in `org-cite-basic--get-field', which see.
+
+Author is obtained from the \"author\" field, if available, or
+from the \"editor\" field otherwise."
+  (or (org-cite-basic--get-field 'author entry-or-key info raw)
+      (org-cite-basic--get-field 'editor entry-or-key info raw)))
+
+(defun org-cite-basic--get-year (entry-or-key info &optional no-suffix)
   "Return year associated to ENTRY-OR-KEY.
 
 ENTRY-OR-KEY is either an association list, as returned by
-`org-cite-basic--get-entry', or a string representing a citation key.  INFO is
-the export state, as a property list.
+`org-cite-basic--get-entry', or a string representing a citation
+key.  INFO is the export state, as a property list.
 
-Unlike `org-cite-basic--get-field', this function disambiguates author-year
-patterns."
+Year is obtained from the \"year\" field, if available, or from
+the \"date\" field if it starts with a year pattern.
+
+Unlike `org-cite-basic--get-field', this function disambiguates
+author-year patterns by adding a letter suffix to the year when
+necessary, unless optional argument NO-SUFFIX is non-nil."
   ;; The cache is an association list with the following structure:
   ;;
   ;;    (AUTHOR-YEAR . KEY-SUFFIX-ALIST).
@@ -343,8 +382,17 @@ patterns."
   ;; KEY-SUFFIX-ALIST is an association (KEY . SUFFIX), where KEY is
   ;; the cite key, as a string, and SUFFIX is the generated suffix
   ;; string, or the empty string.
-  (let* ((author (org-cite-basic--get-field 'author entry-or-key info 'raw))
-         (year (org-cite-basic--get-field 'year entry-or-key info 'raw))
+  (let* ((author (org-cite-basic--get-author entry-or-key info 'raw))
+         (year
+          (or (org-cite-basic--get-field 'year entry-or-key info 'raw)
+              (let ((date
+                     (org-cite-basic--get-field 'date entry-or-key info t)))
+                (and (stringp date)
+                     (string-match (rx string-start
+                                       (group (= 4 digit))
+                                       (or string-end (not digit)))
+                                   date)
+                     (match-string 1 date)))))
          (cache-key (cons author year))
          (key
           (pcase entry-or-key
@@ -358,19 +406,20 @@ patterns."
          (plist-put info :cite-basic/author-date-cache (cons value cache))
          year))
       (`(,_ . ,alist)
-       (concat year
-               (or (cdr (assoc key alist))
-                   (let ((new (org-cite-basic--number-to-suffix (1- (length alist)))))
-                     (push (cons key new) alist)
-                     new)))))))
+       (let ((suffix
+              (or (cdr (assoc key alist))
+                  (let ((new (org-cite-basic--number-to-suffix
+                              (1- (length alist)))))
+                    (push (cons key new) alist)
+                    new))))
+         (if no-suffix year (concat year suffix)))))))
 
 (defun org-cite-basic--print-entry (entry style &optional info)
   "Format ENTRY according to STYLE string.
 ENTRY is an alist, as returned by `org-cite-basic--get-entry'.
 Optional argument INFO is the export state, as a property list."
-  (let ((author (org-cite-basic--get-field 'author entry info))
+  (let ((author (org-cite-basic--get-author entry info))
         (title (org-cite-basic--get-field 'title entry info))
-        (year (org-cite-basic--get-field 'year entry info))
         (from
          (or (org-cite-basic--get-field 'publisher entry info)
              (org-cite-basic--get-field 'journal entry info)
@@ -378,10 +427,13 @@ Optional argument INFO is the export state, as a property list."
              (org-cite-basic--get-field 'school entry info))))
     (pcase style
       ("plain"
-       (org-cite-concat
-        author ". " title (and from (list ", " from)) ", " year "."))
+       (let ((year (org-cite-basic--get-year entry info 'no-suffix)))
+         (org-cite-concat
+          (org-cite-basic--shorten-names author) ". "
+          title (and from (list ", " from)) ", " year ".")))
       ("numeric"
-       (let ((n (org-cite-basic--key-number (cdr (assq 'id entry)) info)))
+       (let ((n (org-cite-basic--key-number (cdr (assq 'id entry)) info))
+             (year (org-cite-basic--get-year entry info 'no-suffix)))
          (org-cite-concat
           (format "[%d] " n) author ", "
           (org-cite-emphasize 'italic title)
@@ -494,7 +546,7 @@ INFO is the export state, as a property list."
                      (suffix (org-element-property :suffix ref)))
                  (funcall format-ref
                           prefix
-                          (org-cite-basic--get-field 'author k info)
+                          (org-cite-basic--get-author k info)
                           (org-cite-basic--get-year k info)
                           suffix)))
              (org-cite-get-references citation)
@@ -533,7 +585,7 @@ INFO is the export state as a property list."
 INFO is the export state, as a property list."
   (and field
        (lambda (a b)
-         (org-string-collate-lessp
+         (string-collate-lessp
           (org-cite-basic--get-field field a info 'raw)
           (org-cite-basic--get-field field b info 'raw)
           nil t))))
@@ -566,7 +618,7 @@ export communication channel, as a property list."
          (org-export-data
           (mapconcat
            (lambda (key)
-             (let ((author (org-cite-basic--get-field 'author key info)))
+             (let ((author (org-cite-basic--get-author key info)))
                (if caps (capitalize author) author)))
            (org-cite-get-references citation t)
            org-cite-basic-author-year-separator)
@@ -602,15 +654,7 @@ export communication channel, as a property list."
       ;; When using this style on citations with multiple references,
       ;; use global affixes and ignore local ones.
       (`(,(or "numeric" "nb") . ,_)
-       (let* ((references (org-cite-get-references citation))
-              (prefix
-               (or (org-element-property :prefix citation)
-                   (and (= 1 (length references))
-                        (org-element-property :prefix (car references)))))
-              (suffix
-               (or (org-element-property :suffix citation)
-                   (and (= 1 (length references))
-                        (org-element-property :suffix (car references))))))
+       (pcase-let ((`(,prefix . ,suffix) (org-cite-main-affixes citation)))
          (org-export-data
           (org-cite-concat
            "(" prefix (org-cite-basic--citation-numbers citation info) suffix ")")
@@ -632,7 +676,7 @@ export communication channel, as a property list."
 (defun org-cite-basic-export-bibliography (keys _files style _props backend info)
   "Generate bibliography.
 KEYS is the list of cited keys, as strings.  STYLE is the expected bibliography
-style, as a string.  BACKEND is the export back-end, as a symbol. INFO is the
+style, as a string.  BACKEND is the export back-end, as a symbol.  INFO is the
 export state, as a property list."
   (mapconcat
    (lambda (k)
@@ -695,35 +739,44 @@ Return chosen style as a string."
 
 (defun org-cite-basic--key-completion-table ()
   "Return completion table for cite keys, as a hash table.
-In this hash table, keys are a strings with author, date, and title of the
-reference.  Values are the cite key."
-  (let ((cache-key (mapcar #'car org-cite-basic--bibliography-cache)))
-    (if (gethash cache-key org-cite-basic--completion-cache)
-        org-cite-basic--completion-cache
+
+In this hash table, keys are a strings with author, date, and
+title of the reference.  Values are the cite keys.
+
+Return nil if there are no bibliography files or no entries."
+  ;; Populate bibliography cache.
+  (let ((entries (org-cite-basic--parse-bibliography)))
+    (cond
+     ((null entries) nil)               ;no bibliography files
+     ((gethash entries org-cite-basic--completion-cache)
+      org-cite-basic--completion-cache)
+     (t
       (clrhash org-cite-basic--completion-cache)
       (dolist (key (org-cite-basic--all-keys))
         (let ((completion
                (concat
-                (let ((author (org-cite-basic--get-field 'author key nil t)))
+                (let ((author (org-cite-basic--get-author key nil 'raw)))
                   (if author
                       (truncate-string-to-width
                        (replace-regexp-in-string " and " "; " author)
                        org-cite-basic-author-column-end nil ?\s)
                     (make-string org-cite-basic-author-column-end ?\s)))
                 org-cite-basic-column-separator
-                (let ((date (org-cite-basic--get-field 'year key nil t)))
+                (let ((date (org-cite-basic--get-year key nil 'no-suffix)))
                   (format "%4s" (or date "")))
                 org-cite-basic-column-separator
                 (org-cite-basic--get-field 'title key nil t))))
           (puthash completion key org-cite-basic--completion-cache)))
-      (puthash cache-key t org-cite-basic--completion-cache)
-      org-cite-basic--completion-cache)))
+      (unless (map-empty-p org-cite-basic--completion-cache) ;no key
+        (puthash entries t org-cite-basic--completion-cache)
+        org-cite-basic--completion-cache)))))
 
 (defun org-cite-basic--complete-key (&optional multiple)
   "Prompt for a reference key and return a citation reference string.
 
-When optional argument MULTIPLE is non-nil, prompt for multiple keys, until one
-of them is nil.  Then return the list of reference strings selected.
+When optional argument MULTIPLE is non-nil, prompt for multiple
+keys, until one of them is nil.  Then return the list of
+reference strings selected.
 
 Raise an error when no bibliography is set in the buffer."
   (let* ((table
@@ -739,9 +792,9 @@ Raise an error when no bibliography is set in the buffer."
              (build-prompt
               (lambda ()
                 (if keys
-                    (format "Key (\"\" to exit) %s: "
+                    (format "Key (empty input exits) %s: "
                             (mapconcat #'identity (reverse keys) ";"))
-                  "Key (\"\" to exit): "))))
+                  "Key (empty input exits): "))))
         (let ((key (funcall prompt (funcall build-prompt))))
           (while (org-string-nw-p key)
             (push (gethash key table) keys)
@@ -767,4 +820,4 @@ Raise an error when no bibliography is set in the buffer."
     (("nil") ("bare" "b") ("bare-caps" "bc") ("caps" "c"))))
 
 (provide 'oc-basic)
-;;; oc-default.el ends here
+;;; oc-basic.el ends here

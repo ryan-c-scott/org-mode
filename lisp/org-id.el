@@ -1,6 +1,6 @@
 ;;; org-id.el --- Global identifiers for Org entries -*- lexical-binding: t; -*-
 ;;
-;; Copyright (C) 2008-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2022 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -76,6 +76,8 @@
 
 (declare-function message-make-fqdn "message" ())
 (declare-function org-goto-location "org-goto" (&optional _buf help))
+;; Declared inside `org-element-with-disabled-cache' macro.
+(declare-function org-element--cache-active-p "org-element.el" (&optional called-from-cache-change-func-p))
 
 ;;; Customization
 
@@ -204,7 +206,7 @@ This variable is only relevant when `org-id-track-globally' is set."
   :type 'file)
 
 (defcustom org-id-locations-file-relative nil
-  "Determines if org-id-locations should be stored as relative links.
+  "Determine if `org-id-locations' should be stored as relative links.
 Non-nil means that links to locations are stored as links
 relative to the location of where `org-id-locations-file' is
 stored.
@@ -419,15 +421,15 @@ So a typical ID could look like \"Org:4nd91V40HI\"."
 	    (substring rnd 18 20)
 	    (substring rnd 20 32))))
 
-(defun org-id-int-to-b36-one-digit (i)
-  "Turn an integer between 0 and 61 into a single character 0..9, A..Z, a..z."
+(defun org-id-int-to-b36-one-digit (integer)
+  "Convert INTEGER between 0 and 61 into a single character 0..9, A..Z, a..z."
   (cond
-   ((< i 10) (+ ?0 i))
-   ((< i 36) (+ ?a i -10))
+   ((< integer 10) (+ ?0 integer))
+   ((< integer 36) (+ ?a integer -10))
    (t (error "Larger that 35"))))
 
 (defun org-id-b36-to-int-one-digit (i)
-  "Turn a character 0..9, A..Z, a..z into a number 0..61.
+  "Convert character 0..9, A..Z, a..z into a number 0..61.
 The input I may be a character, or a single-letter string."
   (and (stringp i) (setq i (string-to-char i)))
   (cond
@@ -435,9 +437,11 @@ The input I may be a character, or a single-letter string."
    ((and (>= i ?a) (<= i ?z)) (+ (- i ?a) 10))
    (t (error "Invalid b36 letter"))))
 
-(defun org-id-int-to-b36 (i &optional length)
-  "Convert an integer to a base-36 number represented as a string."
-  (let ((s ""))
+(defun org-id-int-to-b36 (integer &optional length)
+  "Convert an INTEGER to a base-36 number represented as a string.
+The returned string is padded with leading zeros to LENGTH if necessary."
+  (let ((s "")
+        (i integer))
     (while (> i 0)
       (setq s (concat (char-to-string
 		       (org-id-int-to-b36-one-digit (mod i 36))) s)
@@ -447,11 +451,11 @@ The input I may be a character, or a single-letter string."
 	(setq s (concat (make-string (- length (length s)) ?0) s)))
     s))
 
-(defun org-id-b36-to-int (s)
-  "Convert a base-36 string into the corresponding integer."
+(defun org-id-b36-to-int (string)
+  "Convert a base-36 STRING into the corresponding integer."
   (let ((r 0))
     (mapc (lambda (i) (setq r (+ (* r 36) (org-id-b36-to-int-one-digit i))))
-	  s)
+	  string)
     r))
 
 (defun org-id-time-to-b36 (&optional time)
@@ -489,7 +493,8 @@ and TIME is a Lisp time value (HI LO USEC)."
 Store the relation between files and corresponding IDs.
 This will scan all agenda files, all associated archives, and all
 files currently mentioned in `org-id-locations'.
-When FILES is given, scan also these files."
+When FILES is given, scan also these files.
+If SILENT is non-nil, messages are suppressed."
   (interactive)
   (unless org-id-track-globally
     (error "Please turn on `org-id-track-globally' if you want to track IDs"))
@@ -519,30 +524,31 @@ When FILES is given, scan also these files."
          (ndup 0)
          (i 0))
     (with-temp-buffer
-      (delay-mode-hooks
-	(org-mode)
-	(dolist (file files)
-	  (when (file-exists-p file)
-            (unless silent
-              (cl-incf i)
-              (message "Finding ID locations (%d/%d files): %s" i nfiles file))
-	    (insert-file-contents file nil nil nil 'replace)
-            (let ((ids nil)
-		  (case-fold-search t))
-              (org-with-point-at 1
-		(while (re-search-forward id-regexp nil t)
-		  (when (org-at-property-p)
-                    (push (org-entry-get (point) "ID") ids)))
-		(when ids
-		  (push (cons (abbreviate-file-name file) ids)
-			org-id-locations)
-		  (dolist (id ids)
-                    (cond
-                     ((not (member id seen-ids)) (push id seen-ids))
-                     (silent nil)
-                     (t
-                      (message "Duplicate ID %S" id)
-                      (cl-incf ndup)))))))))))
+      (org-element-with-disabled-cache
+          (delay-mode-hooks
+	    (org-mode)
+	    (dolist (file files)
+	      (when (file-exists-p file)
+                (unless silent
+                  (cl-incf i)
+                  (message "Finding ID locations (%d/%d files): %s" i nfiles file))
+	        (insert-file-contents file nil nil nil 'replace)
+                (let ((ids nil)
+		      (case-fold-search t))
+                  (org-with-point-at 1
+		    (while (re-search-forward id-regexp nil t)
+		      (when (org-at-property-p)
+                        (push (org-entry-get (point) "ID") ids)))
+		    (when ids
+		      (push (cons (abbreviate-file-name file) ids)
+			    org-id-locations)
+		      (dolist (id ids)
+                        (cond
+                         ((not (member id seen-ids)) (push id seen-ids))
+                         (silent nil)
+                         (t
+                          (message "Duplicate ID %S" id)
+                          (cl-incf ndup))))))))))))
     (setq org-id-files (mapcar #'car org-id-locations))
     (org-id-locations-save)
     ;; Now convert to a hash table.
@@ -610,7 +616,7 @@ When FILES is given, scan also these files."
   (add-hook 'kill-emacs-hook 'org-id-locations-save))
 
 (defun org-id-hash-to-alist (hash)
-  "Turn an org-id hash into an alist.
+  "Turn an org-id HASH into an alist.
 This is to be able to write it to a file."
   (let (res x)
     (maphash
@@ -622,7 +628,7 @@ This is to be able to write it to a file."
     res))
 
 (defun org-id-alist-to-hash (list)
-  "Turn an org-id location list into a hash table."
+  "Turn an org-id location LIST into a hash table."
   (let ((res (make-hash-table
 	      :test 'equal
 	      :size (apply '+ (mapcar 'length list))))

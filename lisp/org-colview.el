@@ -1,6 +1,6 @@
 ;;; org-colview.el --- Column View in Org            -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -213,7 +213,7 @@ See `org-columns-summary-types' for details.")
 	      (lambda () (interactive)
 		(org-columns-next-allowed-value nil i))))
 
-(easy-menu-define org-columns-menu org-columns-map "Org Column Menu"
+(easy-menu-define org-columns-menu org-columns-map "Org Column Menu."
   '("Column"
     ["Edit property" org-columns-edit-value t]
     ["Next allowed value" org-columns-next-allowed-value t]
@@ -377,7 +377,8 @@ This is needed to later remove this relative remapping.")
 COLUMNS is an alist (SPEC VALUE DISPLAYED).  Optional argument
 DATELINE is non-nil when the face used should be
 `org-agenda-column-dateline'."
-  (when (ignore-errors (require 'face-remap))
+  (when (and (ignore-errors (require 'face-remap))
+             org-columns-header-line-remap)
     (setq org-columns-header-line-remap
 	  (face-remap-add-relative 'header-line '(:inherit default))))
   (save-excursion
@@ -514,7 +515,8 @@ for the duration of the command.")
   (interactive)
   (when (and (fboundp 'face-remap-remove-relative)
 	     org-columns-header-line-remap)
-    (face-remap-remove-relative org-columns-header-line-remap))
+    (face-remap-remove-relative org-columns-header-line-remap)
+    (setq org-columns-header-line-remap nil))
   (when org-columns-overlays
     (when (local-variable-p 'org-previous-header-line-format)
       (setq header-line-format org-previous-header-line-format)
@@ -878,7 +880,7 @@ When COLUMNS-FMT-STRING is non-nil, use it as the column format."
 	      (setq-local org-colview-initial-truncate-line-value
 			  truncate-lines))
             (if (not global-visual-line-mode)
-              (setq truncate-lines t))
+                (setq truncate-lines t))
 	    (dolist (entry cache)
 	      (goto-char (car entry))
 	      (org-columns--display-here (cdr entry)))))))))
@@ -1272,7 +1274,7 @@ When PRINTF is non-nil, use it to format the result."
   "Summarize CHECK-BOXES with a check-box cookie."
   (format "[%d/%d]"
 	  (cl-count-if (lambda (b) (or (equal b "[X]")
-				   (string-match-p "\\[\\([1-9]\\)/\\1\\]" b)))
+				       (string-match-p "\\[\\([1-9]\\)/\\1\\]" b)))
 		       check-boxes)
 	  (length check-boxes)))
 
@@ -1398,8 +1400,9 @@ other rows.  Each row is a list of fields, as strings, or
 				  (org-get-tags))))
 	     (push (cons (org-reduced-level (org-current-level)) (nreverse row))
 		   table)))))
-     (or (and maxlevel (format "LEVEL<=%d" maxlevel))
-	 (and match match))
+     (if match
+         (concat match (and maxlevel (format "+LEVEL<=%d" maxlevel)))
+       (and maxlevel (format "LEVEL<=%d" maxlevel)))
      (and local 'tree)
      'archive 'comment)
     (org-columns-quit)
@@ -1694,7 +1697,7 @@ This will add overlays to the date lines, to show the summary for each day."
 			       (delq nil
 				     (mapcar
 				      (lambda (e) (org-string-nw-p
-					      (nth 1 (assoc spec e))))
+					           (nth 1 (assoc spec e))))
 				      entries)))
 			      (final (if values
 					 (funcall summarize values printf)

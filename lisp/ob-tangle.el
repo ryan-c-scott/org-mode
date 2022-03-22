@@ -1,6 +1,6 @@
 ;;; ob-tangle.el --- Extract Source Code From Org Files -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
@@ -37,12 +37,16 @@
 (declare-function org-babel-update-block-body "ob-core" (new-body))
 (declare-function org-back-to-heading "org" (&optional invisible-ok))
 (declare-function org-before-first-heading-p "org" ())
-(declare-function org-element-at-point "org-element" ())
+(declare-function org-element--cache-active-p "org-element" ())
+(declare-function org-element-lineage "org-element" (datum &optional types with-self))
+(declare-function org-element-property "org-element" (property element))
+(declare-function org-element-at-point "org-element" (&optional pom cached-only))
 (declare-function org-element-type "org-element" (element))
 (declare-function org-heading-components "org" ())
 (declare-function org-in-commented-heading-p "org" (&optional no-inheritance))
 (declare-function org-in-archived-heading-p "org" (&optional no-inheritance))
 (declare-function outline-previous-heading "outline" ())
+(defvar org-id-link-to-org-use-id) ; Dynamically scoped
 
 (defcustom org-babel-tangle-lang-exts
   '(("emacs-lisp" . "el")
@@ -139,6 +143,14 @@ result.  The default value is `org-remove-indentation'."
   :version "24.1"
   :type 'function)
 
+(defcustom org-babel-tangle-default-file-mode #o544
+  "The default mode used for tangled files, as an integer.
+The default value 356 correspands to the octal #o544, which is
+read-write permissions for the user, read-only for everyone else."
+  :group 'org-babel
+  :package-version '(Org . "9.6")
+  :type 'integer)
+
 (defun org-babel-find-file-noselect-refresh (file)
   "Find file ensuring that the latest changes on disk are
 represented in the file."
@@ -169,21 +181,23 @@ evaluating BODY."
 (defun org-babel-tangle-file (file &optional target-file lang-re)
   "Extract the bodies of source code blocks in FILE.
 Source code blocks are extracted with `org-babel-tangle'.
+
 Optional argument TARGET-FILE can be used to specify a default
-export file for all source blocks.  Optional argument LANG-RE can
-be used to limit the exported source code blocks by languages
-matching a regular expression.  Return a list whose CAR is the
-tangled file name."
+export file for all source blocks.
+
+Optional argument LANG-RE can be used to limit the exported
+source code blocks by languages matching a regular expression.
+
+Return a list whose CAR is the tangled file name."
   (interactive "fFile to tangle: \nP")
-  (let ((visited-p (find-buffer-visiting (expand-file-name file)))
-	to-be-removed)
+  (let* ((visited (find-buffer-visiting file))
+         (buffer (or visited (find-file-noselect file))))
     (prog1
-	(save-window-excursion
-	  (find-file file)
-	  (setq to-be-removed (current-buffer))
-	  (mapcar #'expand-file-name (org-babel-tangle nil target-file lang-re)))
-      (unless visited-p
-	(kill-buffer to-be-removed)))))
+        (with-current-buffer buffer
+          (org-with-wide-buffer
+           (mapcar #'expand-file-name
+                   (org-babel-tangle nil target-file lang-re))))
+      (unless visited (kill-buffer buffer)))))
 
 (defun org-babel-tangle-publish (_ filename pub-dir)
   "Tangle FILENAME and place the results in PUB-DIR."
@@ -251,7 +265,7 @@ matching a regular expression."
 		        (when she-bang
 			  (unless tangle-mode (setq tangle-mode #o755)))
 		        (when tangle-mode
-			  (add-to-list 'modes tangle-mode))
+			  (add-to-list 'modes (org-babel-interpret-file-mode tangle-mode)))
 		        ;; Possibly create the parent directories for file.
 		        (let ((m (funcall get-spec :mkdirp)))
 			  (and m fnd (not (string= m "no"))
@@ -281,7 +295,10 @@ matching a regular expression."
 		 (if (= block-counter 1) "" "s")
 		 (file-name-nondirectory
 		  (buffer-file-name
-		   (or (buffer-base-buffer) (current-buffer)))))
+		   (or (buffer-base-buffer)
+                       (current-buffer)
+                       (and (org-src-edit-buffer-p)
+                            (org-src-source-buffer))))))
 	;; run `org-babel-post-tangle-hook' in all tangled files
 	(when org-babel-post-tangle-hook
 	  (mapc
@@ -290,6 +307,36 @@ matching a regular expression."
 	       (run-hooks 'org-babel-post-tangle-hook)))
 	   path-collector))
 	path-collector))))
+
+(defun org-babel-interpret-file-mode (mode)
+  "Determine the integer representation of a file MODE specification.
+The following forms are currently recognised:
+- an integer (returned without modification)
+- \"o755\" (chmod style octal)
+- \"rwxrw-r--\" (ls style specification)
+- \"a=rw,u+x\" (chmod style) *
+
+* The interpretation of these forms relies on `file-modes-symbolic-to-number',
+  and uses `org-babel-tangle-default-file-mode' as the base mode."
+  (cond
+   ((integerp mode)
+    (if (string-match-p "^[0-7][0-7][0-7]$" (format "%o" mode))
+        mode
+      (user-error "%1$o is not a valid file mode octal. \
+Did you give the decimal value %1$d by mistake?" mode)))
+   ((not (stringp mode))
+    (error "File mode %S not recognised as a valid format." mode))
+   ((string-match-p "^o0?[0-7][0-7][0-7]$" mode)
+    (string-to-number (replace-regexp-in-string "^o" "" mode) 8))
+   ((string-match-p "^[ugoa]*\\(?:[+-=][rwxXstugo]*\\)+\\(,[ugoa]*\\(?:[+-=][rwxXstugo]*\\)+\\)*$" mode)
+    ;; Match regexp taken from `file-modes-symbolic-to-number'.
+    (file-modes-symbolic-to-number mode org-babel-tangle-default-file-mode))
+   ((string-match-p "^[r-][w-][xs-][r-][w-][xs-][r-][w-][x-]$" mode)
+    (file-modes-symbolic-to-number (concat  "u=" (substring mode 0 3)
+                                            ",g=" (substring mode 3 6)
+                                            ",o=" (substring mode 6 9))
+                                   0))
+   (t (error "File mode %S not recognised as a valid format. See `org-babel-interpret-file-mode'." mode))))
 
 (defun org-babel-tangle-clean ()
   "Remove comments inserted by `org-babel-tangle'.
@@ -371,15 +418,20 @@ as computed by `org-babel-tangle-single-block'."
   "Collect source blocks in the current Org file.
 Return an association list of language and source-code block
 specifications of the form used by `org-babel-spec-to-string'
-grouped by tangled file name. Optional argument LANG-RE can be
-used to limit the collected source code blocks by languages
-matching a regular expression. Optional argument TANGLE-FILE can
-be used to limit the collected code blocks by target file."
+grouped by tangled file name.
+
+Optional argument LANG-RE can be used to limit the collected
+source code blocks by languages matching a regular expression.
+
+Optional argument TANGLE-FILE can be used to limit the collected
+code blocks by target file."
   (let ((counter 0) last-heading-pos blocks)
     (org-babel-map-src-blocks (buffer-file-name)
       (let ((current-heading-pos
-	     (org-with-wide-buffer
-	      (org-with-limited-levels (outline-previous-heading)))))
+             (if (org-element--cache-active-p)
+                 (or (org-element-property :begin (org-element-lineage (org-element-at-point) '(headline) t)) 1)
+	       (org-with-wide-buffer
+	        (org-with-limited-levels (outline-previous-heading))))))
 	(if (eq last-heading-pos current-heading-pos) (cl-incf counter)
 	  (setq counter 1)
 	  (setq last-heading-pos current-heading-pos)))
@@ -420,7 +472,14 @@ non-nil, return the full association list to be used by
 	 (extra (nth 3 info))
          (coderef (nth 6 info))
 	 (cref-regexp (org-src-coderef-regexp coderef))
-	 (link (let ((l (org-no-properties (org-store-link nil))))
+	 (link (let* (
+                      ;; The created link is transient.  Using ID is
+                      ;; not necessary, but could have side-effects if
+                      ;; used.  An ID property may be added to
+                      ;; existing entries thus creatin unexpected file
+                      ;; modifications.
+                      (org-id-link-to-org-use-id nil)
+                      (l (org-no-properties (org-store-link nil))))
                  (and (string-match org-link-bracket-re l)
                       (match-string 1 l))))
 	 (source-name
@@ -506,7 +565,13 @@ by `org-babel-get-src-block-info'."
 					   (number-to-string
 					    (line-number-at-pos))))
 			("file" . ,(buffer-file-name))
-			("link" . ,(org-no-properties (org-store-link nil)))
+			("link" . ,(let (;; The created link is transient.  Using ID is
+                                         ;; not necessary, but could have side-effects if
+                                         ;; used.  An ID property may be added to
+                                         ;; existing entries thus creatin unexpected file
+                                         ;; modifications.
+                                         (org-id-link-to-org-use-id nil))
+                                     (org-no-properties (org-store-link nil))))
 			("source-name" . ,name))))))
     (list (org-fill-template org-babel-tangle-comment-format-beg link-data)
 	  (org-fill-template org-babel-tangle-comment-format-end link-data))))
