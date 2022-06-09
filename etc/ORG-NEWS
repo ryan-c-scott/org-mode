@@ -40,7 +40,137 @@ The cache state is saved between Emacs sessions.  Enabled by default.
 The cache persistence can be controlled via
 ~org-element-cache-persistent~.
 
+*** Users experiencing performance issues can use new folding backend
+
+The old folding backend used in Org is poorly scalable when the file
+size increases beyond few Mbs.  The symptoms usually include slow
+cursor motion, especially in long-running Emacs sessions.
+
+A new optimised folding backend is now available, and enabled by
+default.  To disable it, put the following to the Emacs config *before*
+loading Org:
+
+#+begin_src emacs-lisp
+(setq org-fold-core-style 'overlays)
+#+end_src
+
+Even more performance optimisation can be enabled by customising
+=org-fold-core--optimise-for-huge-buffers=.  However, this option may
+be dangerous.  Please, read the variable docstring carefully to
+understand the possible consequences.
+
+When =org-fold-core-style= is set to =text-properties=, several new
+features will become available and several notable changes will happen
+to the Org behaviour.  The new features and changes are listed below.
+
+**** Hidden parts of the links can now be searched and revealed during isearch
+
+In the past, hidden parts of the links could not be searched using
+isearch (=C-s=).  Now, they are searchable by default.  The hidden
+match is also revealed temporarily during isearch.
+
+To restore the old behaviour add the following core to your Emacs
+config:
+
+#+begin_src emacs-lisp
+(defun org-hidden-link-ignore-isearch ()
+  "Do not match hidden parts of links during isearch."
+  (org-fold-core-set-folding-spec-property 'org-link :isearch-open nil)
+  (org-fold-core-set-folding-spec-property 'org-link :isearch-ignore t))
+(add-hook 'org-mode-hook #'org-hidden-link-ignore-isearch)
+#+end_src
+
+See docstring of =org-fold-core--specs= to see more details about
+=:isearch-open= and =:isearch-ignore= properties.
+
+**** =org-catch-invisible-edits= now works for hidden parts of the links and for emphasis markers
+
+In the past, user could edit invisible parts of the links and emphasis markers.  Now, the editing is respecting the value of =org-catch-invisible-edits=.
+
+Note that hidden parts of sub-/super-scripts are still not handled.
+
+**** Breaking structure of folded elements automatically reveals the folded text
+
+In the past, the user could be left with unfoldable text after breaking the org structure.
+
+For example, if
+
+#+begin_src org
+:DRAWER:
+like this
+:END:
+#+end_src
+
+is folded and then edited into
+
+#+begin_src org
+DRAWER:
+like this
+:END:
+#+end_src
+The hidden text would not be revealed.
+
+Now, breaking structure of drawers, blocks, and headings automatically
+reveals the folded text.
+
+**** Folding state of the drawers is now preserved when cycling headline visibility
+
+In the past drawers were folded every time a headline is unfolded.
+
+Now, it is not the case anymore.  The drawer folding state is
+preserved.  The initial folding state of all the drawers in buffer is
+set according to the startup visibility settings.
+
+To restore the old behaviour, add the following code to Emacs config:
+
+#+begin_src emacs-lisp
+(add-hook 'org-cycle-hook #'org-cycle-hide-drawers)
+#+end_src
+
+Note that old behaviour may cause performance issues when cycling
+headline visibility in large buffers.
+
+**** =outline-*= functions may no longer work correctly in Org mode
+
+The new folding backend breaks some of the =outline-*= functions that
+rely on the details of visibility state implementation in
+=outline.el=.  The old Org folding backend was compatible with the
+=outline.el= folding, but it is not the case anymore with the new
+backend.  From now on, using =outline-*= functions is strongly
+discouraged when working with Org files.
+
 ** New features
+
+*** New customization option =org-property-separators=
+A new alist variable to control how properties are combined.
+
+If a property is specified multiple times with a =+=, like
+
+#+begin_src org
+:PROPERTIES:
+:EXPORT_FILE_NAME: some/path
+:EXPORT_FILE_NAME+: to/file
+:END:
+#+end_src
+
+the old behavior was to always combine them with a single space
+(=some/path to/file=).  For the new variable, the car of each item in
+the alist should be either a list of property names or a regular
+expression, while the cdr should be the separator to use when
+combining that property.
+
+The default value for the separator is a single space, if none of the
+provided items in the alist match a given property.
+
+For example, in order to combine =EXPORT_FILE_NAME= properties with a
+forward slash =/=, one can use
+
+#+begin_src emacs-lisp
+(setq org-property-separators '((("EXPORT_FILE_NAME") . "/")))
+#+end_src
+
+The example above would then produce the property value
+=some/path/to/file=.
 
 *** New library =org-persist.el= implements variable persistence across Emacs sessions
 
@@ -51,7 +181,7 @@ The entry points are ~org-persist-register~, ~org-persist-unregister~,
 ~org-persist-read~, and ~org-persist-read-all~.  Storing circular
 structures is supported.  Storing references between different
 variables is also supported (see =:inherit= key in
-~org-persist-register~).  
+~org-persist-register~).
 
 The library permits storing buffer-local variables.  Such variables
 are linked to the buffer text, file =inode=, and file path.
@@ -76,6 +206,19 @@ the =compact-itemx= export option, or globally using the
 Items in a description list that begin with =Function:=, =Variable:=
 or certain related prefixes are converted using Texinfo definition
 commands.
+*** New =:noweb-prefix= babel header argument
+
+=:noweb-prefix= can be set to =no= to prevent the prefix characters
+from being repeated when expanding a multiline noweb reference.
+
+*** New LaTeX source block backend using =engraved-faces-latex=
+
+When ~org-latex-src-block-backend~ is set to ~engraved~,
+=engrave-faces-latex= from [[http://elpa.gnu.org/packages/engrave-faces.html][engrave-faces]] is used to transcode source
+blocks to LaTeX. This requires the =fvextra=, =float=, and (by
+default, but not necessarily) =tcolorbox= LaTeX packages be
+installed. It uses Emacs' font-lock information, and so tends to
+produce results superior to Minted or Listings.
 
 ** New functions and changes in function arguments
 
@@ -116,6 +259,16 @@ argument.
 
 This function is intended for us in the definition of a ~kbd~ macro in
 files that are exported to Texinfo.
+
+*** =org-at-heading-p= now recognises optional argument. Its meaning is inverted.
+
+=org-at-heading-p= now returns t by default on headings inside folds.
+Passing optional argument will produce the old behaviour.
+** Removed or renamed functions and variables
+*** =org-plantump-executable-args= is renamed and applies to jar as well
+
+The new variable name is =org-plantuml-args=.  It now applies to both
+jar PlantUML file and executable.
 
 ** Miscellaneous
 
@@ -160,6 +313,15 @@ Chmod-style permissions are based on the new variable
 ~org-babel-tangle-default-file-mode~.
 
 *** A new custom setting =org-agenda-clock-report-header= to add a header to org agenda clock report
+
+*** ~org-latex-listings~ has been replaced with ~org-latex-src-block-backend~
+
+~org-latex-listings~ has been renamed to better reflect the current
+purpose of the variable.  The replacement variable
+~org-latex-src-block-backend~ acts in exactly the same way, however it
+accepts =listings= and =verbatim= in place of =t= and =nil= (which
+still work, but are no longer listed as valid options).
+
 * Version 9.5
 
 ** Important announcements and breaking changes
@@ -600,10 +762,6 @@ you can now configure them.
 (the default) or use the attachment directory of the current node, if
 it is correctly configured as a Git repository.
 
-*** Some faces now use fixed-pitch
-
-See [[msg:875z8njaol.fsf@protesilaos.com][this thread]].
-
 *** New option ~org-attach-sync-delete-empty-dir~
 
 ~org-attach-sync-delete-empty-dir~ controls the deletion of an empty
@@ -665,7 +823,7 @@ heading, except return nil.
 
 In the past, faces of todo keywords, emphasised text, tags, and
 priority cookies inherited =default= face.  The resulting headline
-fontification was not always consistent, as discussed in [[https://lists.gnu.org/archive/html/emacs-orgmode/2020-09/msg00331.html][this bug
+fontification was not always consistent, as discussed in [[msg::87h7sawubl.fsf@protesilaos.com][this bug
 report]].  Now, the relevant faces adapt to face used to fontify the
 current headline level.
 

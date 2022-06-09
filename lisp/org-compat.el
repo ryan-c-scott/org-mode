@@ -50,18 +50,20 @@
 (declare-function org-end-of-subtree "org" (&optional invisible-ok to-heading))
 (declare-function org-get-heading "org" (&optional no-tags no-todo no-priority no-comment))
 (declare-function org-get-tags "org" (&optional pos local))
-(declare-function org-hide-block-toggle "org" (&optional force no-error element))
+(declare-function org-fold-hide-block-toggle "org-fold" (&optional force no-error element))
 (declare-function org-link-display-format "ol" (s))
 (declare-function org-link-set-parameters "ol" (type &rest rest))
 (declare-function org-log-into-drawer "org" ())
 (declare-function org-make-tag-string "org" (tags))
 (declare-function org-reduced-level "org" (l))
 (declare-function org-return "org" (&optional indent arg interactive))
-(declare-function org-show-context "org" (&optional key))
+(declare-function org-fold-show-context "org-fold" (&optional key))
 (declare-function org-table-end "org-table" (&optional table-type))
 (declare-function outline-next-heading "outline" ())
 (declare-function speedbar-line-directory "speedbar" (&optional depth))
 (declare-function table--at-cell-p "table" (position &optional object at-column))
+(declare-function org-fold-region "org-fold" (from to flag &optional spec))
+(declare-function org-fold-show-all "org-fold" (&optional types))
 
 (defvar calendar-mode-map)
 (defvar org-complex-heading-regexp)
@@ -72,6 +74,36 @@
 (defvar org-table-dataline-regexp)
 (defvar org-table-tab-recognizes-table.el)
 (defvar org-table1-hline-regexp)
+(defvar org-fold-core-style)
+
+
+;;; Emacs < 29 compatibility
+
+(defvar org-file-has-changed-p--hash-table (make-hash-table :test #'equal)
+  "Internal variable used by `org-file-has-changed-p'.")
+
+(if (fboundp 'file-has-changed-p)
+    (defalias 'org-file-has-changed-p #'file-has-changed-p)
+  (defun org-file-has-changed-p (file &optional tag)
+    "Return non-nil if FILE has changed.
+The size and modification time of FILE are compared to the size
+and modification time of the same FILE during a previous
+invocation of `org-file-has-changed-p'.  Thus, the first invocation
+of `org-file-has-changed-p' always returns non-nil when FILE exists.
+The optional argument TAG, which must be a symbol, can be used to
+limit the comparison to invocations with identical tags; it can be
+the symbol of the calling function, for example."
+    (let* ((file (directory-file-name (expand-file-name file)))
+           (remote-file-name-inhibit-cache t)
+           (fileattr (file-attributes file 'integer))
+	   (attr (and fileattr
+                      (cons (file-attribute-size fileattr)
+		            (file-attribute-modification-time fileattr))))
+	   (sym (concat (symbol-name tag) "@" file))
+	   (cachedattr (gethash sym org-file-has-changed-p--hash-table)))
+      (when (not (equal attr cachedattr))
+        (puthash sym attr org-file-has-changed-p--hash-table)))))
+
 
 
 ;;; Emacs < 28.1 compatibility
@@ -235,6 +267,11 @@ This is a floating point number if the size is too large for an integer."
 (define-obsolete-function-alias 'org-select-frame-set-input-focus 'select-frame-set-input-focus "9.0")
 (define-obsolete-function-alias 'org-file-remote-p 'file-remote-p "9.2")
 
+(define-obsolete-function-alias 'org-show-context 'org-fold-show-context "9.6")
+(define-obsolete-function-alias 'org-show-entry 'org-fold-show-entry "9.6")
+(define-obsolete-function-alias 'org-show-children 'org-fold-show-children "9.6")
+
+
 (defmacro org-re (s)
   "Replace posix classes in regular expression S."
   (declare (debug (form))
@@ -287,6 +324,8 @@ Counting starts at 1."
   'org-preview-latex-default-process "9.0")
 (define-obsolete-variable-alias 'org-latex-preview-ltxpng-directory
   'org-preview-latex-image-directory "9.0")
+(define-obsolete-variable-alias 'org-latex-listings
+  'org-latex-src-block-backend "9.6")
 (define-obsolete-function-alias 'org-table-p 'org-at-table-p "9.0")
 (define-obsolete-function-alias 'org-on-heading-p 'org-at-heading-p "9.0")
 (define-obsolete-function-alias 'org-at-regexp-p 'org-in-regexp "8.3")
@@ -344,6 +383,80 @@ Counting starts at 1."
 (define-obsolete-function-alias 'org-remove-latex-fragment-image-overlays
   'org-clear-latex-preview "9.3")
 
+(define-obsolete-function-alias 'org-hide-archived-subtrees
+  'org-fold-hide-archived-subtrees "9.6")
+
+(define-obsolete-function-alias 'org-flag-region
+  'org-fold-region "9.6")
+
+(define-obsolete-function-alias 'org-flag-subtree
+  'org-fold-subtree "9.6")
+
+(define-obsolete-function-alias 'org-hide-entry
+  'org-fold-hide-entry "9.6")
+
+(define-obsolete-function-alias 'org-show-subtree
+  'org-fold-show-subtree "9.6")
+
+(define-obsolete-function-alias 'org--hide-wrapper-toggle
+  'org-fold--hide-wrapper-toggle "9.6")
+
+(define-obsolete-function-alias 'org-hide-block-toggle
+  'org-fold-hide-block-toggle "9.6")
+
+(define-obsolete-function-alias 'org-hide-drawer-toggle
+  'org-fold-hide-drawer-toggle "9.6")
+
+(define-obsolete-function-alias 'org--hide-drawers
+  'org-fold--hide-drawers "9.6")
+
+(define-obsolete-function-alias 'org-hide-block-all
+  'org-fold-hide-block-all "9.6")
+
+(define-obsolete-function-alias 'org-hide-drawer-all
+  'org-fold-hide-drawer-all "9.6")
+
+(define-obsolete-function-alias 'org-show-all
+  'org-fold-show-all "9.6")
+
+(define-obsolete-function-alias 'org-set-startup-visibility
+  'org-cycle-set-startup-visibility "9.6")
+
+(define-obsolete-function-alias 'org-show-set-visibility
+  'org-fold-show-set-visibility "9.6")
+
+(define-obsolete-function-alias 'org-check-before-invisible-edit
+  'org-fold-check-before-invisible-edit "9.6")
+
+(define-obsolete-function-alias 'org-flag-above-first-heading
+  'org-fold-flag-above-first-heading "9.6")
+
+(define-obsolete-function-alias 'org-show-branches-buffer
+  'org-fold-show-branches-buffer "9.6")
+
+(define-obsolete-function-alias 'org-show-siblings
+  'org-fold-show-siblings "9.6")
+
+(define-obsolete-function-alias 'org-show-hidden-entry
+  'org-fold-show-hidden-entry "9.6")
+
+(define-obsolete-function-alias 'org-flag-heading
+  'org-fold-heading "9.6")
+
+(define-obsolete-function-alias 'org-set-startup-visibility
+  'org-cycle-set-startup-visibility "9.6")
+
+(define-obsolete-function-alias 'org-set-visibility-according-to-property
+  'org-cycle-set-visibility-according-to-property "9.6")
+
+(define-obsolete-variable-alias 'org-scroll-position-to-restore
+  'org-cycle-scroll-position-to-restore "9.6")
+(define-obsolete-function-alias 'org-optimize-window-after-visibility-change
+  'org-cycle-optimize-window-after-visibility-change "9.6")
+
+(define-obsolete-function-alias 'org-force-cycle-archived
+  'org-cycle-force-archived "9.6")
+
 (define-obsolete-variable-alias 'org-attach-directory
   'org-attach-id-dir "9.3")
 (make-obsolete 'org-attach-store-link "No longer used" "9.4")
@@ -351,6 +464,17 @@ Counting starts at 1."
 
 (define-obsolete-function-alias 'org-file-url-p 'org-url-p "9.5")
 
+(define-obsolete-variable-alias 'org-show-context-detail
+  'org-fold-show-context-detail "9.6")
+
+(define-obsolete-variable-alias 'org-catch-invisible-edits
+  'org-fold-catch-invisible-edits "9.6")
+
+(define-obsolete-variable-alias 'org-reveal-start-hook
+  'org-fold-reveal-start-hook "9.6")
+(define-obsolete-function-alias 'org-file-url-p 'org-url-p "9.6")
+(define-obsolete-variable-alias 'org-plantuml-executable-args 'org-plantuml-args
+  "Org 9.6")
 (defun org-in-fixed-width-region-p ()
   "Non-nil if point in a fixed-width region."
   (save-match-data
@@ -627,7 +751,7 @@ use of this function is for the stuck project list."
 (defun org-show-block-all ()
   "Unfold all blocks in the current buffer."
   (interactive)
-  (remove-overlays nil nil 'invisible 'org-hide-block))
+  (org-fold-show-all '(blocks)))
 
 (make-obsolete 'org-show-block-all
 	       "use `org-show-all' instead."
@@ -670,7 +794,7 @@ When optional argument ELEMENT is a parsed drawer, as returned by
 When buffer positions BEG and END are provided, hide or show that
 region as a drawer without further ado."
   (declare (obsolete "use `org-hide-drawer-toggle' instead." "9.4"))
-  (if (and beg end) (org-flag-region beg end flag 'outline)
+  (if (and beg end) (org-fold-region beg end flag (if (eq org-fold-core-style 'text-properties) 'drawer 'outline))
     (let ((drawer
 	   (or element
 	       (and (save-excursion
@@ -679,12 +803,12 @@ region as a drawer without further ado."
 		    (org-element-at-point)))))
       (when (memq (org-element-type drawer) '(drawer property-drawer))
 	(let ((post (org-element-property :post-affiliated drawer)))
-	  (org-flag-region
+	  (org-fold-region
 	   (save-excursion (goto-char post) (line-end-position))
 	   (save-excursion (goto-char (org-element-property :end drawer))
 			   (skip-chars-backward " \t\n")
 			   (line-end-position))
-	   flag 'outline)
+	   flag (if (eq org-fold-core-style 'text-properties) 'drawer 'outline))
 	  ;; When the drawer is hidden away, make sure point lies in
 	  ;; a visible part of the buffer.
 	  (when (invisible-p (max (1- (point)) (point-min)))
@@ -696,7 +820,7 @@ Unlike to `org-hide-block-toggle', this function does not throw
 an error.  Return a non-nil value when toggling is successful."
   (declare (obsolete "use `org-hide-block-toggle' instead." "9.4"))
   (interactive)
-  (org-hide-block-toggle nil t))
+  (org-fold-hide-block-toggle nil t))
 
 (defun org-hide-block-toggle-all ()
   "Toggle the visibility of all blocks in the current buffer."
@@ -712,7 +836,7 @@ an error.  Return a non-nil value when toggling is successful."
 	(save-excursion
 	  (save-match-data
             (goto-char (match-beginning 0))
-            (org-hide-block-toggle)))))))
+            (org-fold-hide-block-toggle)))))))
 
 (defun org-return-indent ()
   "Goto next table row or insert a newline and indent.
@@ -751,6 +875,10 @@ context.  See the individual commands for more information."
 (define-obsolete-function-alias 'org-copy 'org-refile-copy "9.4")
 
 (define-obsolete-function-alias 'org-get-last-sibling 'org-get-previous-sibling "9.4")
+
+(define-obsolete-function-alias 'org-truely-invisible-p
+  'org-truly-invisible-p "9.6"
+  "Compatibility alias for legacy misspelling of `org-truly-invisible-p'.")
 
 ;;;; Obsolete link types
 
@@ -901,7 +1029,6 @@ attention to case differences."
 (defcustom org-imenu-depth 2
   "The maximum level for Imenu access to Org headlines.
 This also applied for speedbar access."
-  :group 'org-imenu-and-speedbar
   :type 'integer)
 
 ;;;; Imenu
@@ -941,7 +1068,7 @@ This also applied for speedbar access."
      (add-hook 'imenu-after-jump-hook
 	       (lambda ()
 		 (when (derived-mode-p 'org-mode)
-		   (org-show-context 'org-goto))))
+		   (org-fold-show-context 'org-goto))))
      (add-hook 'org-mode-hook
 	       (lambda ()
 		 (setq imenu-create-index-function 'org-imenu-get-tree)))))
@@ -1006,7 +1133,7 @@ To get rid of the restriction, use `\\[org-agenda-remove-restriction-lock]'."
      (define-key speedbar-file-key-map ">" 'org-agenda-remove-restriction-lock)
      (define-key speedbar-file-key-map "\C-c\C-x>" 'org-agenda-remove-restriction-lock)
      (add-hook 'speedbar-visiting-tag-hook
-	       (lambda () (and (derived-mode-p 'org-mode) (org-show-context 'org-goto))))))
+	       (lambda () (and (derived-mode-p 'org-mode) (org-fold-show-context 'org-goto))))))
 
 ;;;; Add Log
 
@@ -1114,16 +1241,16 @@ ELEMENT is the element at point."
 
 ;;;; Bookmark
 
-(defun org-bookmark-jump-unhide ()
+(defun org-bookmark-jump-unhide (&rest _)
   "Unhide the current position, to show the bookmark location."
   (and (derived-mode-p 'org-mode)
        (or (org-invisible-p)
 	   (save-excursion (goto-char (max (point-min) (1- (point))))
 			   (org-invisible-p)))
-       (org-show-context 'bookmark-jump)))
+       (org-fold-show-context 'bookmark-jump)))
 
 ;; Make `bookmark-jump' shows the jump location if it was hidden.
-(add-hook 'bookmark-after-jump-hook 'org-bookmark-jump-unhide)
+(add-hook 'bookmark-after-jump-hook #'org-bookmark-jump-unhide)
 
 ;;;; Calendar
 
@@ -1176,42 +1303,29 @@ key."
 ;;;; Saveplace
 
 ;; Make sure saveplace shows the location if it was hidden
-(eval-after-load 'saveplace
-  '(defadvice save-place-find-file-hook (after org-make-visible activate)
-     "Make the position visible."
-     (org-bookmark-jump-unhide)))
+(advice-add 'save-place-find-file-hook :after #'org-bookmark-jump-unhide)
 
 ;;;; Ecb
 
 ;; Make sure ecb shows the location if it was hidden
-(eval-after-load 'ecb
-  '(defadvice ecb-method-clicked (after esf/org-show-context activate)
-     "Make hierarchy visible when jumping into location from ECB tree buffer."
-     (when (derived-mode-p 'org-mode)
-       (org-show-context))))
+(advice-add 'ecb-method-clicked :after #'org--ecb-show-context)
+(defun org--ecb-show-context (&rest _)
+  "Make hierarchy visible when jumping into location from ECB tree buffer."
+  (when (derived-mode-p 'org-mode)
+    (org-fold-show-context)))
 
 ;;;; Simple
 
-(defun org-mark-jump-unhide ()
+(defun org-mark-jump-unhide (&rest _)
   "Make the point visible with `org-show-context' after jumping to the mark."
   (when (and (derived-mode-p 'org-mode)
 	     (org-invisible-p))
-    (org-show-context 'mark-goto)))
+    (org-fold-show-context 'mark-goto)))
 
-(eval-after-load 'simple
-  '(defadvice pop-to-mark-command (after org-make-visible activate)
-     "Make the point visible with `org-show-context'."
-     (org-mark-jump-unhide)))
+(advice-add 'pop-to-mark-command :after #'org-mark-jump-unhide)
 
-(eval-after-load 'simple
-  '(defadvice exchange-point-and-mark (after org-make-visible activate)
-     "Make the point visible with `org-show-context'."
-     (org-mark-jump-unhide)))
-
-(eval-after-load 'simple
-  '(defadvice pop-global-mark (after org-make-visible activate)
-     "Make the point visible with `org-show-context'."
-     (org-mark-jump-unhide)))
+(advice-add 'exchange-point-and-mark :after #'org-mark-jump-unhide)
+(advice-add 'pop-global-mark :after #'org-mark-jump-unhide)
 
 ;;;; Session
 
@@ -1220,11 +1334,81 @@ key."
 (eval-after-load 'session
   '(add-to-list 'session-globals-exclude 'org-mark-ring))
 
+;;;; outline-mode
+
+;; Folding in outline-mode is not compatible with org-mode folding
+;; anymore. Working around to avoid breakage of external packages
+;; assuming the compatibility.
+(defadvice outline-flag-region (around outline-flag-region@fix-for-org-fold (from to flag) activate)
+  "Run `org-fold-region' when in org-mode."
+  (if (eq major-mode 'org-mode)
+      (setq ad-return-value (org-fold-region (max from (point-min)) (min to (point-max)) flag 'headline))
+    ad-do-it))
+
+(defadvice outline-next-visible-heading (around outline-next-visible-heading@fix-for-org-fold (arg) activate)
+  "Run `org-next-visible-heading' when in org-mode."
+  (interactive "p")
+  (if (eq major-mode 'org-mode)
+      (setq ad-return-value (org-next-visible-heading arg))
+    ad-do-it))
+
+(defadvice outline-back-to-heading (around outline-back-to-heading@fix-for-org-fold (&optional invisible-ok) activate)
+  "Run `org-back-to-heading' when in org-mode."
+  (if (eq major-mode 'org-mode)
+      (setq ad-return-value
+            (progn
+              (beginning-of-line)
+              (or (org-at-heading-p (not invisible-ok))
+                  (let (found)
+	            (save-excursion
+	              (while (not found)
+	                (or (re-search-backward (concat "^\\(?:" outline-regexp "\\)")
+				                nil t)
+                            (signal 'outline-before-first-heading nil))
+	                (setq found (and (or invisible-ok (not (org-fold-folded-p)))
+			                 (point)))))
+	            (goto-char found)
+	            found))))
+    ad-do-it))
+
+(defadvice outline-on-heading-p (around outline-on-heading-p@fix-for-org-fold (&optional invisible-ok) activate)
+  "Run `org-at-heading-p' when in org-mode."
+  (if (eq major-mode 'org-mode)
+      (setq ad-return-value (org-at-heading-p (not invisible-ok)))
+    ad-do-it))
+
+(defadvice outline-hide-sublevels (around outline-hide-sublevels@fix-for-org-fold (levels) activate)
+  "Run `org-fold-hide-sublevels' when in org-mode."
+  (interactive (list
+		(cond
+		 (current-prefix-arg (prefix-numeric-value current-prefix-arg))
+		 ((save-excursion (beginning-of-line)
+				  (looking-at outline-regexp))
+		  (funcall outline-level))
+		 (t 1))))
+  (if (eq major-mode 'org-mode)
+      (setq ad-return-value (org-fold-hide-sublevels levels))
+    ad-do-it))
+
+(defadvice outline-toggle-children (around outline-toggle-children@fix-for-org-fold () activate)
+  "Run `org-fold-hide-sublevels' when in org-mode."
+  (interactive)
+  (if (eq major-mode 'org-mode)
+      (setq ad-return-value
+            (save-excursion
+              (org-back-to-heading)
+              (if (not (org-fold-folded-p (line-end-position)))
+                  (org-fold-hide-subtree)
+                (org-fold-show-children)
+                (org-fold-show-entry))))
+    ad-do-it))
+
+;; TODO: outline-headers-as-kill
+
 ;;;; Speed commands
 
 (make-obsolete-variable 'org-speed-commands-user
                         "configure `org-speed-commands' instead." "9.5")
-
 (provide 'org-compat)
 
 ;; Local variables:

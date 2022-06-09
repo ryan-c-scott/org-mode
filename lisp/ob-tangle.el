@@ -282,11 +282,24 @@ matching a regular expression."
 		    lspecs)
 		   (when make-dir
 		     (make-directory fnd 'parents))
-                   ;; erase previous file
-                   (when (file-exists-p file-name)
-                     (delete-file file-name))
-		   (write-region nil nil file-name)
-		   (mapc (lambda (mode) (set-file-modes file-name mode)) modes)
+                   (unless
+                       (and (file-exists-p file-name)
+                            (let ((tangle-buf (current-buffer)))
+                              (with-temp-buffer
+                                (insert-file-contents file-name)
+                                (and
+                                 (equal (buffer-size)
+                                        (buffer-size tangle-buf))
+                                 (= 0
+                                    (let (case-fold-search)
+                                      (compare-buffer-substrings
+                                       nil nil nil
+                                       tangle-buf nil nil)))))))
+                     ;; erase previous file
+                     (when (file-exists-p file-name)
+                       (delete-file file-name))
+		     (write-region nil nil file-name)
+		     (mapc (lambda (mode) (set-file-modes file-name mode)) modes))
                    (push file-name path-collector))))))
 	 (if (equal arg '(4))
 	     (org-babel-tangle-single-block 1 t)
@@ -529,6 +542,7 @@ non-nil, return the full association list to be used by
 			 (match-end 0)
 		       (point-min))))
 	      (point)))))
+         (src-tfile (cdr (assq :tangle params)))
 	 (result
 	  (list start-line
 		(if org-babel-tangle-use-relative-file-links
@@ -536,11 +550,12 @@ non-nil, return the full association list to be used by
 		  file)
 		(if (and org-babel-tangle-use-relative-file-links
 			 (string-match org-link-types-re link)
-			 (string= (match-string 1 link) "file"))
+			 (string= (match-string 1 link) "file")
+                         (stringp src-tfile))
 		    (concat "file:"
 			    (file-relative-name (substring link (match-end 0))
 						(file-name-directory
-						 (cdr (assq :tangle params)))))
+						 src-tfile)))
 		  link)
 		source-name
 		params
@@ -549,8 +564,7 @@ non-nil, return the full association list to be used by
 		  (org-trim (org-remove-indentation body)))
 		comment)))
     (if only-this-block
-        (let* ((src-tfile (cdr (assq :tangle (nth 4 result))))
-               (file-name (org-babel-effective-tangled-filename
+        (let* ((file-name (org-babel-effective-tangled-filename
                            (nth 1 result) src-lang src-tfile)))
           (list (cons file-name (list (cons src-lang result)))))
       result)))

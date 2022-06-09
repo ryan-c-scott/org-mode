@@ -91,6 +91,7 @@
 (require 'ol)
 (require 'org-attach)
 (require 'org-macro)
+(require 'org-fold)
 (require 'ox)
 (require 'seq)
 
@@ -264,7 +265,7 @@ CHECKERS is the list of checkers used."
   (let ((l (org-lint--current-line)))
     (switch-to-buffer-other-window org-lint--source-buffer)
     (org-goto-line l)
-    (org-show-set-visibility 'local)
+    (org-fold-show-set-visibility 'local)
     (recenter)))
 
 (defun org-lint--show-source ()
@@ -320,7 +321,7 @@ ARG can also be a list of checker names, as symbols, to run."
 		    nil t)))
 	      (cl-remove-if-not
 	       (lambda (c)
-		 (assoc-string (org-lint-checker-categories c) category))
+		 (assoc-string category (org-lint-checker-categories c)))
 	       org-lint--checkers)))
 	   (`(16)
 	    (list

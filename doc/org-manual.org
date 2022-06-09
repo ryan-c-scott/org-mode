@@ -18,24 +18,30 @@
 :END:
 #+cindex: summary
 
-Org is a mode for keeping notes, maintaining TODO lists, and project
-planning with a fast and effective plain-text markup language.  It
-also is an authoring system with unique support for literate
-programming and reproducible research.
+Org Mode is an authoring tool and a TODO lists manager for GNU Emacs.
+It relies on a lightweight plain-text markup language used in files
+with the =.org= extension.
 
-Org is implemented on top of Outline mode, which makes it possible to
-keep the content of large files well structured.  Visibility cycling
-and structure editing help to work with the tree.  Tables are easily
-created with a built-in table editor.  Plain text URL-like links
-connect to websites, emails, Usenet messages, BBDB entries, and any
-files related to the projects.
+As an authoring tool, Org helps you write structured documents and
+provides exporting facilities. Org files can also be used for literate
+programming and reproducible research.  As a TODO lists manager, Org
+helps you organize your tasks in a flexible way, from daily needs to
+detailed project-planning, allowing logging, multiple views on your
+tasks, exporting your agendas, etc.
+
+Org mode is implemented on top of Outline mode, which makes it
+possible to keep the content of large files well structured.
+Visibility cycling and structure editing help to work with the tree.
+Tables are easily created with a built-in table editor.  Plain text
+URL-like links connect to websites, emails, Usenet messages, BBDB
+entries, and any files related to the projects.
 
 Org develops organizational tasks around notes files that contain
 lists or information about projects as plain text.  Project planning
 and task management make use of metadata which is part of an outline
 node.  Based on this data, specific entries can be extracted in
-queries and create dynamic /agenda views/ that also integrate the
-Emacs calendar and diary.  Org can be used to implement many different
+queries and create dynamic /agenda views/ that also integrate the Emacs
+calendar and diary.  Org can be used to implement many different
 project planning schemes, such as David Allen's GTD system.
 
 Org files can serve as a single source authoring system with export to
@@ -495,11 +501,11 @@ Org uses just two commands, bound to {{{kbd(TAB)}}} and
   Switch back to the startup visibility of the buffer (see [[*Initial
   visibility]]).
 
-- {{{kbd(C-u C-u C-u TAB)}}} (~outline-show-all~) ::
+- {{{kbd(C-u C-u C-u TAB)}}} (~org-show-all~) ::
 
   #+cindex: show all, command
   #+kindex: C-u C-u C-u TAB
-  #+findex: outline-show-all
+  #+findex: org-show-all
   Show all, including drawers.
 
 - {{{kbd(C-c C-r)}}} (~org-reveal~) ::
@@ -515,18 +521,18 @@ Org uses just two commands, bound to {{{kbd(TAB)}}} and
   headings.  With a double prefix argument, also show the entire
   subtree of the parent.
 
-- {{{kbd(C-c C-k)}}} (~outline-show-branches~) ::
+- {{{kbd(C-c C-k)}}} (~org-show-branches~) ::
 
   #+cindex: show branches, command
   #+kindex: C-c C-k
-  #+findex: outline-show-branches
+  #+findex: org-show-branches
   Expose all the headings of the subtree, but not their bodies.
 
-- {{{kbd(C-c TAB)}}} (~outline-show-children~) ::
+- {{{kbd(C-c TAB)}}} (~org-show-children~) ::
 
   #+cindex: show children, command
   #+kindex: C-c TAB
-  #+findex: outline-show-children
+  #+findex: org-show-children
   Expose all direct children of the subtree.  With a numeric prefix
   argument {{{var(N)}}}, expose all children down to level
   {{{var(N)}}}.
@@ -590,10 +596,10 @@ for this property are =folded=, =children=, =content=, and =all=.
 :END:
 #+cindex: edits, catching invisible
 
-#+vindex: org-catch-invisible-edits
+#+vindex: org-fold-catch-invisible-edits
 Sometimes you may inadvertently edit an invisible part of the buffer
 and be confused on what has been edited and how to undo the mistake.
-Setting ~org-catch-invisible-edits~ to non-~nil~ helps preventing
+Setting ~org-fold-catch-invisible-edits~ to non-~nil~ helps preventing
 this.  See the docstring of this option on how Org should catch
 invisible edits and process them.
 
@@ -3573,7 +3579,7 @@ replacement text.  Here is an example:
 (setq org-link-abbrev-alist
       '(("bugzilla"        . "http://10.1.2.9/bugzilla/show_bug.cgi?id=")
         ("Nu Html Checker" . "https://validator.w3.org/nu/?doc=%h")
-	("duckduckgo"      . "https://duckduckgo.com/?q=%s")
+        ("duckduckgo"      . "https://duckduckgo.com/?q=%s")
         ("omap"            . "http://nominatim.openstreetmap.org/search?q=%s&polygon=1")
         ("ads"             . "https://ui.adsabs.harvard.edu/search/q=%20author%3A\"%s\"")))
 #+end_src
@@ -4267,7 +4273,7 @@ specific settings like =TODO(!)=.  For example:
 #+cindex: @samp{STYLE}, property
 
 Org has the ability to track the consistency of a special category of
-TODO, called "habits."  To use habits, you have to enable the ~habits~
+TODO, called "habits."  To use habits, you have to enable the ~habit~
 module by customizing the variable ~org-modules~.
 
 A habit has the following properties:
@@ -6412,7 +6418,7 @@ special repeaters =++= and =.+=.  For example:
    Marking this DONE shifts the date to one month after today.
 
 ,** TODO Wash my hands
-   DEADLINE: <2019-04-05 08:00 Sun .+1h>
+   DEADLINE: <2019-04-05 08:00 Fri .+1h>
    Marking this DONE shifts the date to exactly one hour from now.
 #+end_example
 
@@ -6659,7 +6665,7 @@ into the buffer by ~org-clock-report~:
 #+cindex: @samp{BEGIN clocktable}
 #+begin_example
 ,#+BEGIN: clocktable :maxlevel 2 :emphasize nil :scope file
-,#+END: clocktable
+,#+END:
 #+end_example
 
 #+vindex: org-clocktable-defaults
@@ -6843,7 +6849,7 @@ day, you could write:
 
 #+begin_example
 ,#+BEGIN: clocktable :maxlevel 2 :block today :scope tree1 :link t
-,#+END: clocktable
+,#+END:
 #+end_example
 
 #+texinfo: @noindent
@@ -6852,7 +6858,7 @@ To use a specific time range you could write[fn:80]
 #+begin_example
 ,#+BEGIN: clocktable :tstart "<2006-08-10 Thu 10:00>"
                     :tend "<2006-08-10 Thu 12:00>"
-,#+END: clocktable
+,#+END:
 #+end_example
 
 #+texinfo: @noindent
@@ -6860,7 +6866,7 @@ A range starting a week ago and ending right now could be written as
 
 #+begin_example
 ,#+BEGIN: clocktable :tstart "<-1w>" :tend "<now>"
-,#+END: clocktable
+,#+END:
 #+end_example
 
 #+texinfo: @noindent
@@ -6868,7 +6874,7 @@ A summary of the current subtree with % times would be
 
 #+begin_example
 ,#+BEGIN: clocktable :scope subtree :link t :formula %
-,#+END: clocktable
+,#+END:
 #+end_example
 
 #+texinfo: @noindent
@@ -6877,7 +6883,7 @@ last week would be
 
 #+begin_example
 ,#+BEGIN: clocktable :scope agenda :block lastweek :compact t
-,#+END: clocktable
+,#+END:
 #+end_example
 
 *** Resolving idle time and continuous clocking
@@ -7369,7 +7375,7 @@ its location in the outline tree, but behaves in the following way:
   command (see [[*Visibility Cycling]]).  You can force cycling archived
   subtrees with {{{kbd(C-TAB)}}}, or by setting the option
   ~org-cycle-open-archived-trees~.  Also normal outline commands, like
-  ~outline-show-all~, open archived subtrees.
+  ~org-show-all~, open archived subtrees.
 
 -
   #+vindex: org-sparse-tree-open-archived-trees
@@ -7415,9 +7421,9 @@ The following commands help manage the =ARCHIVE= tag:
   child.  If point is /not/ on a headline when this command is
   invoked, check the level 1 trees.
 
-- {{{kbd(C-c C-TAB)}}} (~org-force-cycle-archived~) ::
+- {{{kbd(C-c C-TAB)}}} (~org-cycle-force-archived~) ::
 
-  #+kindex: C-TAB
+  #+kindex: C-c C-TAB
   Cycle a tree even if it is tagged with =ARCHIVE=.
 
 - {{{kbd(C-c C-x A)}}} (~org-archive-to-archive-sibling~) ::
@@ -9409,11 +9415,11 @@ the Internet, and outside of business hours, with something like this:
 #+begin_src emacs-lisp
 (defun my-auto-exclude-fn (tag)
   (when (cond ((string= tag "net")
-	       (/= 0 (call-process "/sbin/ping" nil nil nil
-			           "-c1" "-q" "-t1" "mail.gnu.org")))
+               (/= 0 (call-process "/sbin/ping" nil nil nil
+                                   "-c1" "-q" "-t1" "mail.gnu.org")))
               ((member tag '("errand" "call"))
-	       (let ((hr (nth 2 (decode-time))))
-	         (or (< hr 8) (> hr 21)))))
+               (let ((hr (nth 2 (decode-time))))
+                 (or (< hr 8) (> hr 21)))))
     (concat "-" tag)))
 
 (setq org-agenda-auto-exclude-function #'my-auto-exclude-fn)
@@ -11153,7 +11159,7 @@ Here is an example
 #+end_example
 
 #+cindex: formatting source code, markup rules
-#+vindex: org-latex-listings
+#+vindex: org-latex-src-block-backend
 If the example is source code from a programming language, or any
 other text that can be marked up by Font Lock in Emacs, you can ask
 for the example to look like the fontified Emacs buffer[fn:114].  This
@@ -13805,22 +13811,26 @@ objects through the attributes =:float= and =:options=.  For =:float=:
 
 #+vindex: org-latex-listings-options
 #+vindex: org-latex-minted-options
+#+vindex: org-latex-engraved-options
 The LaTeX export back-end passes string values in =:options= to LaTeX
 packages for customization of that specific source block.  In the
-example below, the =:options= are set for Minted.  Minted is a source
-code highlighting LaTeX package with many configurable options[fn:134].
+example below, the =:options= are set for Engraved or Minted.  Minted
+is a source code highlighting LaTeX package with many configurable
+options[fn:134].  Both Minted and Engraved are built on [[https://www.ctan.org/pkg/fvextra][fvextra]], and
+so support many of the same options.
 
 #+begin_example
-,#+ATTR_LATEX: :options commentstyle=\bfseries
+,#+ATTR_LATEX: :options mathescape
 ,#+BEGIN_SRC emacs-lisp
-  (defun Fib (n)
+  (defun Fib (n) ; $n_i = n_{i-2} + n_{i-1}$
     (if (< n 2) n (+ (Fib (- n 1)) (Fib (- n 2)))))
 ,#+END_SRC
 #+end_example
 
-To apply similar configuration options for all source blocks in
-a file, use the ~org-latex-listings-options~ and
-~org-latex-minted-options~ variables.
+To apply similar configuration options for all source blocks in a
+file, use the ~org-latex-listings-options~,
+~org-latex-engraved-options~, and ~org-latex-minted-options~
+variables.
 
 *** Example blocks in LaTeX export
 :PROPERTIES:
@@ -16252,7 +16262,7 @@ Settings]]), however, override everything.
 | ~:html-preamble-format~                        | ~org-html-preamble-format~                        |
 | ~:html-preamble~                               | ~org-html-preamble~                               |
 | ~:html-self-link-headlines~                    | ~org-html-self-link-headlines~                    |
-| ~:html-table-align-individual-field~           | ~de{org-html-table-align-individual-fields~       |
+| ~:html-table-align-individual-field~           | ~org-html-table-align-individual-fields~          |
 | ~:html-table-attributes~                       | ~org-html-table-default-attributes~               |
 | ~:html-table-caption-above~                    | ~org-html-table-caption-above~                    |
 | ~:html-table-data-tags~                        | ~org-html-table-data-tags~                        |
@@ -16283,6 +16293,9 @@ Settings]]), however, override everything.
 | ~:latex-default-table-environment~     | ~org-latex-default-table-environment~     |
 | ~:latex-default-table-mode~            | ~org-latex-default-table-mode~            |
 | ~:latex-diary-timestamp-format~        | ~org-latex-diary-timestamp-format~        |
+| ~:latex-engraved-options~              | ~org-latex-engraved-options~              |
+| ~:latex-engraved-preamble~             | ~org-latex-engraved-preamble~             |
+| ~:latex-engraved-theme~                | ~org-latex-engraved-theme~                |
 | ~:latex-footnote-defined-format~       | ~org-latex-footnote-defined-format~       |
 | ~:latex-footnote-separator~            | ~org-latex-footnote-separator~            |
 | ~:latex-format-drawer-function~        | ~org-latex-format-drawer-function~        |
@@ -16298,12 +16311,12 @@ Settings]]), however, override everything.
 | ~:latex-link-with-unknown-path-format~ | ~org-latex-link-with-unknown-path-format~ |
 | ~:latex-listings-langs~                | ~org-latex-listings-langs~                |
 | ~:latex-listings-options~              | ~org-latex-listings-options~              |
-| ~:latex-listings~                      | ~org-latex-listings~                      |
 | ~:latex-minted-langs~                  | ~org-latex-minted-langs~                  |
 | ~:latex-minted-options~                | ~org-latex-minted-options~                |
 | ~:latex-prefer-user-labels~            | ~org-latex-prefer-user-labels~            |
 | ~:latex-subtitle-format~               | ~org-latex-subtitle-format~               |
 | ~:latex-subtitle-separate~             | ~org-latex-subtitle-separate~             |
+| ~:latex-src-block-backend~             | ~org-latex-src-block-backend~             |
 | ~:latex-table-scientific-notation~     | ~org-latex-table-scientific-notation~     |
 | ~:latex-tables-booktabs~               | ~org-latex-tables-booktabs~               |
 | ~:latex-tables-centered~               | ~org-latex-tables-centered~               |
@@ -18758,6 +18771,23 @@ if true:
     print('do things when true')
 else:
     print('do things when false')
+#+end_example
+
+This prefix behavior can be turned off in a block by setting the
+=noweb-prefix= header argument to =no=, as in:
+
+#+begin_example
+,#+BEGIN_SRC elisp :noweb-prefix no
+  (setq example-data "<<example>>")
+,#+END_SRC
+#+end_example
+
+#+texinfo: @noindent
+which expands to:
+
+#+begin_example
+(setq example-data "this is the
+multi-line body of example")
 #+end_example
 
 When in doubt about the outcome of a source code block expansion, you
@@ -22238,8 +22268,8 @@ a fragment, see the documentation of the function
 [fn:114] This works automatically for the HTML backend (it requires
 version 1.34 of the =htmlize.el= package, which you need to install).
 Fontified code chunks in LaTeX can be achieved using either the
-[[https://www.ctan.org/pkg/listings][listings]] package or the [[https://www.ctan.org/pkg/minted][minted]] package.  Refer to
-~org-latex-listings~ for details.
+[[https://www.ctan.org/pkg/listings][listings]] LaTeX package, [[https://www.ctan.org/pkg/minted][minted]] LaTeX package, or by using
+[[https://elpa.gnu.org/packages/engrave-faces.html][engrave-faces]] .  Refer to ~org-latex-src-block-backend~ for details.
 
 [fn:115] Source code in code blocks may also be evaluated either
 interactively or on export.  See [[*Working with Source Code]] for more
