@@ -2630,11 +2630,10 @@ specified as an an \"attachment:\" style link"
            (attach-dir (when request-attachment
                          (let ((default-directory base-directory))
                            (org-attach-dir nil t))))
-           (attach-dir-len (when request-attachment (length attach-dir)))
-           (in-attach-dir (when (and request-attachment (> (length result-file-name) attach-dir-len))
-                            (string=
-                             (substring result-file-name 0 attach-dir-len)
-                             attach-dir))))
+           (in-attach-dir (and request-attachment
+                               (string-prefix-p
+                                attach-dir
+                                result-file-name))))
       (format "[[%s:%s]%s]"
               (pcase type
                 ((and 'attachment (guard in-attach-dir)) "attachment")
