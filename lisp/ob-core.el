@@ -801,7 +801,8 @@ block."
 		    (let ((*this* (if (not file) result
 				    (org-babel-result-to-file
 				     file
-				     (org-babel--file-desc params result)))))
+				     (org-babel--file-desc params result)
+                                     'attachment))))
 		      (setq result (org-babel-ref-resolve post))
 		      (when file
 			(setq result-params (remove "file" result-params))))))
