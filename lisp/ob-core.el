@@ -2786,8 +2786,8 @@ parameters when merging lists."
                                          (t ""))))))
           ((or '(:dir . attach) '(:dir . "'attach"))
            (unless (org-id-get)
-             (if (y-or-n-p (format "Create ID for entry \"%s\"?"
-                                   (org-get-heading t t t t)))
+             (if (or noninteractive (y-or-n-p (format "Create ID for entry \"%s\"?"
+                                                      (org-get-heading t t t t))))
                  (org-id-get-create)
                (error "Can't attach to entry \"%s\". Entry has no ID"
                       (org-get-heading t t t t))))
