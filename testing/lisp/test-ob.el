@@ -1774,37 +1774,9 @@ nil
   "Test :dir header using special 'attach value"
   (should
    (org-test-with-temp-text-in-file
-    "* Symbol
+    "* 'attach Symbol
 <point>#+begin_src elisp :dir 'attach :results file
-(f-write-text \"attachment testing\" 'utf-8 \"test.txt\")
-\"test.txt\"
-#+end_src"
-    (org-babel-execute-src-block)
-    (goto-char (org-babel-where-is-src-block-result))
-    (forward-line)
-    (and
-     (file-exists-p (format "%s/test.txt" (org-attach-dir nil t)))
-     (string= (buffer-substring-no-properties (point) (line-end-position))
-              "[[attachment:test.txt]]"))))
-  (should
-   (org-test-with-temp-text-in-file
-    "* String
-<point>#+begin_src elisp :dir \"'attach\" :results file
-(f-write-text \"attachment testing\" 'utf-8 \"test.txt\")
-\"test.txt\"
-#+end_src"
-    (org-babel-execute-src-block)
-    (goto-char (org-babel-where-is-src-block-result))
-    (forward-line)
-    (and
-     (file-exists-p (format "%s/test.txt" (org-attach-dir nil t)))
-     (string= (buffer-substring-no-properties (point) (line-end-position))
-              "[[attachment:test.txt]]"))))
-  (should
-   (org-test-with-temp-text-in-file
-    "* Existing ID
-<point>#+begin_src elisp :dir 'attach :results file
-(f-write-text \"attachment testing\" 'utf-8 \"test.txt\")
+(with-temp-file \"test.txt\" (insert \"attachment testing\n\"))
 \"test.txt\"
 #+end_src"
     (org-id-get-create)
@@ -1817,13 +1789,28 @@ nil
               "[[attachment:test.txt]]"))))
   (should
    (org-test-with-temp-text-in-file
-    "* Existing DIR property
+    "* 'attach String
+<point>#+begin_src elisp :dir \"'attach\" :results file
+(with-temp-file \"test.txt\" (insert \"attachment testing\n\"))
+\"test.txt\"
+#+end_src"
+    (org-id-get-create)
+    (org-babel-execute-src-block)
+    (goto-char (org-babel-where-is-src-block-result))
+    (forward-line)
+    (and
+     (file-exists-p (format "%s/test.txt" (org-attach-dir nil t)))
+     (string= (buffer-substring-no-properties (point) (line-end-position))
+              "[[attachment:test.txt]]"))))
+  (should
+   (org-test-with-temp-text-in-file
+    "* 'attach with Existing DIR property
 :PROPERTIES:
 :DIR:      custom-attach-dir
 :END:
 
 <point>#+begin_src elisp :dir 'attach :results file
-(f-write-text \"attachment testing\" 'utf-8 \"test.txt\")
+(with-temp-file \"test.txt\" (insert \"attachment testing\n\"))
 \"test.txt\"
 #+end_src"
     (message "DIR: %s" (org-attach-dir t))
@@ -1834,7 +1821,20 @@ nil
      (file-exists-p (format "%s/test.txt" (org-attach-dir nil t)))
      (string= (buffer-substring-no-properties (point) (line-end-position))
               "[[attachment:test.txt]]"))))
-  )
+  (should-error
+   (org-test-with-temp-text-in-file
+    "* 'attach with no ID or DIR
+<point>#+begin_src elisp :dir 'attach :results file
+(with-temp-file \"test.txt\" (insert \"attachment testing\n\"))
+\"test.txt\"
+#+end_src"
+    (org-babel-execute-src-block)
+    (goto-char (org-babel-where-is-src-block-result))
+    (forward-line)
+    (and
+     (file-exists-p (format "%s/test.txt" (org-attach-dir nil t)))
+     (string= (buffer-substring-no-properties (point) (line-end-position))
+              "[[attachment:test.txt]]")))))
 
 (ert-deftest test-ob-core/dir-mkdirp ()
   "Test :mkdirp with :dir header combination."
