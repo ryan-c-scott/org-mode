@@ -2627,12 +2627,9 @@ specified as an an \"attachment:\" style link"
 			       (expand-file-name
 			        base-directory)))))
            (request-attachment (eq type 'attachment))
-           (attach-dir (when request-attachment
-                         (let ((default-directory base-directory))
-                           (org-attach-dir nil t))))
            (in-attach-dir (and request-attachment
                                (string-prefix-p
-                                attach-dir
+                                default-directory
                                 result-file-name))))
       (format "[[%s:%s]%s]"
               (pcase type
