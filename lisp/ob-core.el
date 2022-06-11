@@ -2782,12 +2782,7 @@ parameters when merging lists."
                                          (t ""))))))
           ((or '(:dir . attach) '(:dir . "'attach"))
            (unless (org-attach-dir nil t)
-             (unless (org-id-get)
-               (if (or noninteractive (y-or-n-p (format "Create ID for entry \"%s\"?"
-                                                        (org-get-heading t t t t))))
-                   (org-id-get-create)
-                 (error "Can't attach to entry \"%s\". Entry has no ID"
-                        (org-get-heading t t t t)))))
+             (error "No attachment directory for element (add :ID: or :DIR: property)"))
            (setq params (append
                          `((:dir . ,(org-attach-dir nil t))
                            (:mkdirp . "yes"))
