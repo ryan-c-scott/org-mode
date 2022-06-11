@@ -2784,12 +2784,13 @@ parameters when merging lists."
                                          (value value)
                                          (t ""))))))
           ((or '(:dir . attach) '(:dir . "'attach"))
-           (unless (org-id-get)
-             (if (or noninteractive (y-or-n-p (format "Create ID for entry \"%s\"?"
-                                                      (org-get-heading t t t t))))
-                 (org-id-get-create)
-               (error "Can't attach to entry \"%s\". Entry has no ID"
-                      (org-get-heading t t t t))))
+           (unless (org-attach-dir nil t)
+             (unless (org-id-get)
+               (if (or noninteractive (y-or-n-p (format "Create ID for entry \"%s\"?"
+                                                        (org-get-heading t t t t))))
+                   (org-id-get-create)
+                 (error "Can't attach to entry \"%s\". Entry has no ID"
+                        (org-get-heading t t t t)))))
            (setq params (append
                          `((:dir . ,(org-attach-dir nil t))
                            (:mkdirp . "yes"))
