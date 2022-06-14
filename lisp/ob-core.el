@@ -2629,7 +2629,7 @@ specified as an an \"attachment:\" style link"
 			        base-directory)))))
            (request-attachment (eq type 'attachment))
            (attach-dir (let ((default-directory base-directory))
-                             (org-attach-dir nil t)))
+                         (expand-file-name (org-attach-dir nil t))))
            (in-attach-dir (and request-attachment
                                attach-dir
                                (string-prefix-p
