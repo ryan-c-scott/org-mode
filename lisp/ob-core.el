@@ -2620,16 +2620,20 @@ specified as an an \"attachment:\" style link"
   (when (stringp result)
     (let* ((result-file-name (expand-file-name result))
            (base-file-name (buffer-file-name (buffer-base-buffer)))
-           (base-directory (file-name-directory base-file-name))
+           (base-directory (and buffer-file-name
+                                (file-name-directory base-file-name)))
            (same-directory?
 	    (and base-file-name
 	         (not (string= (expand-file-name default-directory)
 			       (expand-file-name
 			        base-directory)))))
            (request-attachment (eq type 'attachment))
+           (attach-dir (let ((default-directory base-directory))
+                             (org-attach-dir nil t)))
            (in-attach-dir (and request-attachment
+                               attach-dir
                                (string-prefix-p
-                                default-directory
+                                attach-dir
                                 result-file-name))))
       (format "[[%s:%s]%s]"
               (pcase type
